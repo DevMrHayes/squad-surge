@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <title>Squad Surge: 100-Level Tactical Highway</title>
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="icon" type="image/svg+xml" href="./icon.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;600;700;800;900&family=JetBrains+Mono:wght@700;800&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background-color: #030712;
+      font-family: 'Inter', sans-serif;
+      color: #f8fafc;
+      touch-action: none;
+    }
+    .font-mono-num {
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .btn-tap {
+      transition: transform 0.08s ease, filter 0.12s ease;
+    }
+    .btn-tap:active {
+      transform: scale(0.95);
+    }
+    ::-webkit-scrollbar {
+      width: 4px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #090e1a;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #1e293b;
+      border-radius: 9999px;
+    }
+  </style>
+</head>
+<body class="flex items-center justify-center w-full h-full bg-slate-950">
+
+  <!-- MOBILE APP SHELL -->
+  <div id="appShell" class="relative w-full h-full max-w-[440px] flex flex-col bg-[#050814] shadow-2xl overflow-hidden border-x border-slate-800/60">
+
+    <!-- TOP ULTRA-CLEAN HUD (Strictly zero clutter during active combat) -->
+    <header class="z-20 px-3 pt-3 pb-2 bg-slate-950/90 backdrop-blur-md border-b border-slate-800/80 flex flex-col gap-1.5 shrink-0">
+      <div class="flex items-center justify-between gap-2">
+        <!-- Level Selector Pill -->
+        <button id="btnOpenMap" class="btn-tap flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-900 border border-slate-700/80 text-xs font-extrabold text-white shadow-sm">
+          <span>Level <span id="uiLevelNum" class="text-sky-400 font-mono-num">1</span></span>
+          <span class="text-slate-400 text-[10px]">▾</span>
+        </button>
+
+        <!-- Center Enemies Left Progress Bar -->
+        <div class="flex-1 px-1.5">
+          <div class="flex items-center justify-between text-[10px] font-extrabold tracking-wider uppercase mb-1">
+            <span class="text-slate-400">Enemies Left</span>
+            <span id="uiEnemiesLeft" class="text-rose-400 font-mono-num">0</span>
+          </div>
+          <div class="w-full h-2 rounded-full bg-slate-800 overflow-hidden p-[1px]">
+            <div id="uiProgressFill" class="h-full rounded-full bg-gradient-to-r from-sky-400 to-emerald-400 transition-all duration-150" style="width: 0%"></div>
+          </div>
+        </div>
+
+        <!-- Gold Pill, Profile & Pause -->
+        <div class="flex items-center gap-1.5">
+          <button id="btnProfile" class="btn-tap flex items-center gap-1 px-2.5 py-1.5 rounded-full bg-slate-900 border border-amber-500/30 text-xs font-extrabold text-amber-300 font-mono-num">
+            <span>🪙</span>
+            <span id="uiCoins">150</span>
+          </button>
+          <button id="btnPause" class="btn-tap w-8 h-8 rounded-full bg-slate-900 border border-slate-700/80 flex items-center justify-center text-xs text-slate-300">
+            ⏸
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <!-- MAIN HIGHWAY CANVAS WRAPPER -->
+    <div id="canvasWrap" class="relative flex-1 w-full h-full overflow-hidden">
+      <canvas id="gameCanvas" class="block w-full h-full"></canvas>
+
+      <!-- PRE-LEVEL BRIEFING OVERLAY (Disappears immediately when combat starts) -->
+      <div id="startOverlay" class="absolute inset-0 z-10 flex flex-col justify-between p-3.5 bg-slate-950/80 backdrop-blur-[4px]">
+        <!-- Top Mission Intelligence Card -->
+        <div class="bg-slate-900/95 border border-slate-800 rounded-2xl p-3.5 shadow-xl">
+          <div class="flex items-center justify-between mb-1.5">
+            <span id="startBadge" class="px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-sky-500/20 text-sky-300 border border-sky-400/30">Sector 1</span>
+            <span id="startReward" class="text-xs font-extrabold text-amber-300 font-mono-num">+64 🪙</span>
+          </div>
+          <h2 id="startTitle" class="text-base font-black text-white tracking-tight mb-1">MISSION 1</h2>
+          <div class="text-xs font-bold text-sky-300 mb-0.5" id="startRuleTitle">Split-Lane Dilemma</div>
+          <p id="startRuleDesc" class="text-[11px] text-slate-400 leading-snug">Enemies rush the opposite lane while gates absorb your firepower. Slide carefully.</p>
+        </div>
+
+        <!-- Pre-Combat Upgrades Panel -->
+        <div class="my-auto py-2">
+          <div class="text-[11px] font-extrabold text-slate-400 uppercase tracking-wider mb-2 px-1">Tactical Division Upgrades</div>
+          <div id="startUpgrades" class="grid grid-cols-2 gap-2"></div>
+        </div>
+
+        <!-- Bottom Action Button -->
+        <button id="btnTapToStart" class="btn-tap w-full py-4 rounded-2xl bg-gradient-to-r from-sky-400 to-sky-500 text-slate-950 font-black text-base tracking-wider uppercase shadow-lg shadow-sky-500/25 flex items-center justify-center gap-2">
+          <span>🚀 DEPLOY SQUAD</span>
+        </button>
+      </div>
+
+      <!-- PAUSE MODAL -->
+      <div id="pauseModal" class="hidden absolute inset-0 z-30 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md">
+        <div class="w-full max-w-[320px] bg-slate-900 border border-slate-800 rounded-2xl p-5 flex flex-col gap-3 shadow-2xl">
+          <h3 class="text-base font-black text-white text-center">TACTICAL PAUSE</h3>
+          <button id="btnResume" class="btn-tap w-full py-3 rounded-xl bg-sky-400 text-slate-950 font-extrabold text-sm uppercase">Resume Mission</button>
+          <button id="btnRestartPause" class="btn-tap w-full py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-slate-200 font-bold text-xs uppercase">Restart Level</button>
+          <button id="btnToggleSound" class="btn-tap w-full py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-slate-300 font-bold text-xs">🔊 Sound: ON</button>
+        </div>
+      </div>
+
+      <!-- RESULT MODAL -->
+      <div id="resultModal" class="hidden absolute inset-0 z-30 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md">
+        <div class="w-full max-w-[340px] bg-slate-900 border border-slate-800 rounded-3xl p-6 flex flex-col items-center text-center shadow-2xl">
+          <div id="resIcon" class="text-4xl mb-2">🏆</div>
+          <h3 id="resTitle" class="text-lg font-black text-white tracking-tight mb-1">SECTOR SECURED</h3>
+          <p id="resDesc" class="text-xs text-slate-400 mb-4 leading-relaxed">Excellent tactical command!</p>
+          <div class="px-4 py-2 rounded-xl bg-slate-950 border border-amber-500/30 text-amber-300 font-mono-num font-black text-sm mb-5" id="resCoins">
+            +120 🪙
+          </div>
+          <div class="w-full flex gap-2">
+            <button id="btnRetry" class="btn-tap flex-1 py-3 rounded-xl bg-slate-800 border border-slate-700 text-white font-extrabold text-xs uppercase">Retry</button>
+            <button id="btnNext" class="btn-tap flex-1 py-3 rounded-xl bg-sky-400 text-slate-950 font-extrabold text-xs uppercase">Next Level ▸</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 1-100 CAMPAIGN MAP MODAL -->
+      <div id="mapModal" class="hidden absolute inset-0 z-40 flex flex-col p-4 bg-slate-950/95 backdrop-blur-md">
+        <div class="flex items-center justify-between pb-3 border-b border-slate-800 shrink-0">
+          <div>
+            <h3 class="text-sm font-black text-white">TACTICAL CAMPAIGN MAP</h3>
+            <div class="text-[10px] text-slate-400">100 Levels across 5 Sector Biomes</div>
+          </div>
+          <button id="btnCloseMap" class="btn-tap w-8 h-8 rounded-full bg-slate-900 border border-slate-800 text-slate-300 text-xs">✕</button>
+        </div>
+        <div class="flex-1 overflow-y-auto py-3">
+          <div id="levelGrid" class="grid grid-cols-5 gap-2"></div>
+        </div>
+      </div>
+
+      <!-- CLOUD PROFILE & ACHIEVEMENTS MODAL -->
+      <div id="profileModal" class="hidden absolute inset-0 z-40 flex flex-col p-4 bg-slate-950/95 backdrop-blur-md">
+        <div class="flex items-center justify-between pb-3 border-b border-slate-800 shrink-0">
+          <div>
+            <h3 class="text-sm font-black text-white" id="profileName">Commander Profile</h3>
+            <div class="text-[10px] text-slate-400" id="cloudStatus">🟢 Cloud Sync Ready</div>
+          </div>
+          <button id="btnCloseProfile" class="btn-tap w-8 h-8 rounded-full bg-slate-900 border border-slate-800 text-slate-300 text-xs">✕</button>
+        </div>
+
+        <div class="flex-1 overflow-y-auto py-3 space-y-3">
+          <!-- Cloud Login Prompt -->
+          <div class="p-3 rounded-2xl bg-slate-900 border border-slate-800 flex items-center justify-between">
+            <div>
+              <div class="text-xs font-bold text-white">Google Cloud Sync</div>
+              <div class="text-[10px] text-slate-400">Sync career stats across mobile & desktop</div>
+            </div>
+            <button id="btnGoogleLogin" class="btn-tap px-3 py-1.5 rounded-lg bg-sky-500 text-slate-950 font-bold text-xs">
+              Sign In
+            </button>
+          </div>
+
+          <!-- Career Stats Grid -->
+          <div class="grid grid-cols-2 gap-2">
+            <div class="p-2.5 rounded-xl bg-slate-900 border border-slate-800">
+              <div class="text-[10px] font-bold text-slate-400">ENEMIES PURGED</div>
+              <div id="statKills" class="text-base font-black font-mono-num text-sky-400">0</div>
+            </div>
+            <div class="p-2.5 rounded-xl bg-slate-900 border border-slate-800">
+              <div class="text-[10px] font-bold text-slate-400">BOSSES TOPPLED</div>
+              <div id="statBosses" class="text-base font-black font-mono-num text-rose-400">0</div>
+            </div>
+            <div class="p-2.5 rounded-xl bg-slate-900 border border-slate-800">
+              <div class="text-[10px] font-bold text-slate-400">ALTARS CONVERTED</div>
+              <div id="statAltars" class="text-base font-black font-mono-num text-purple-400">0</div>
+            </div>
+            <div class="p-2.5 rounded-xl bg-slate-900 border border-slate-800">
+              <div class="text-[10px] font-bold text-slate-400">RICOCHET KILLS</div>
+              <div id="statRicochet" class="text-base font-black font-mono-num text-amber-400">0</div>
+            </div>
+          </div>
+
+          <!-- Achievements Catalog -->
+          <div>
+            <div class="text-[11px] font-extrabold text-slate-400 uppercase tracking-wider mb-2">Campaign Achievements</div>
+            <div id="achievementsList" class="space-y-2"></div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <script type="module" src="./src/main.ts"></script>
+</body>
+</html>

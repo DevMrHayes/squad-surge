@@ -1,0 +1,14 @@
+{
+  "projects": {
+    "default": "shipyard-cat-game"
+  },
+  "targets": {
+    "shipyard-cat-game": {
+      "hosting": {
+        "squad-surge-game": [
+          "squad-surge-game"
+        ]
+      }
+    }
+  }
+}
