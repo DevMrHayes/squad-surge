@@ -1,13 +1,20 @@
-// Squad Surge: Core 60FPS Game Loop & State Manager
+// Squad Surge: Core 60FPS Time-Scheduled Game Loop & State Manager
 import { 
   PlayerState, 
   LevelPlan, 
   Gate, 
+  Crate,
   FieldObstacle, 
   Enemy, 
+  EnemyMortarShell,
   Bullet, 
   Particle, 
+  Shockwave,
   FloatingText,
+  GateQueueItem,
+  CrateQueueItem,
+  EnemyScheduleItem,
+  ObstacleQueueItem,
   SaveData 
 } from '../types/game';
 import { WaveGenerator } from './waveGenerator';
@@ -21,25 +28,33 @@ export type GameMode = 'READY' | 'PLAYING' | 'PAUSED' | 'VICTORY' | 'DEFEAT';
 export class GameLoop {
   private canvas: HTMLCanvasElement;
   private ctx: CanvasRenderingContext2D;
-  private cw: number = 380;
-  private ch: number = 740;
+  public cw: number = 380;
+  public ch: number = 640;
 
   public mode: GameMode = 'READY';
   public currentLevel: number = 1;
   public plan: LevelPlan;
+  public elapsed: number = 0;
+  public trauma: number = 0;
 
   public player: PlayerState;
   public gates: Gate[] = [];
+  public crates: Crate[] = [];
   public obstacles: FieldObstacle[] = [];
   public enemies: Enemy[] = [];
+  public enemyMortars: EnemyMortarShell[] = [];
   public bullets: Bullet[] = [];
   public particles: Particle[] = [];
+  public shockwaves: Shockwave[] = [];
   public floatTexts: FloatingText[] = [];
 
-  public enemiesLeft: number = 0;
-  public totalEnemiesInLevel: number = 0;
-  public scrollOffset: number = 0;
-  public scrollSpeed: number = 52;
+  // Queues
+  private gateQueue: GateQueueItem[] = [];
+  private crateQueue: CrateQueueItem[] = [];
+  private enemySchedule: EnemyScheduleItem[] = [];
+  private obstacleQueue: ObstacleQueueItem[] = [];
+
+  public enemiesKilled: number = 0;
   public targetX: number = 190;
   public isDragging: boolean = false;
 
@@ -73,8 +88,9 @@ export class GameLoop {
     const startCount = 1 + (save.upgrades.startSquad - 1) * 2;
     return {
       x: this.cw / 2,
-      y: this.ch - 108,
+      y: this.ch * 0.78,
       count: startCount,
+      shields: 0,
       maxVisualBarrels: 14,
       fireTimer: 0,
       sniperTimer: 0,
@@ -91,7 +107,6 @@ export class GameLoop {
         cryoTimer: 0,
         rapidTimer: 0,
         blastTimer: 0,
-        shieldHp: 0,
         laserWeapon: false,
         homingMissiles: false,
       },
@@ -101,7 +116,7 @@ export class GameLoop {
   }
 
   public resize(): void {
-    const rect = this.canvas.parentElement?.getBoundingClientRect() || { width: 380, height: 740 };
+    const rect = this.canvas.parentElement?.getBoundingClientRect() || { width: 380, height: 640 };
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
     this.cw = rect.width;
     this.ch = rect.height;
@@ -111,50 +126,46 @@ export class GameLoop {
     this.ctx.scale(dpr, dpr);
 
     if (this.player) {
-      this.player.y = this.ch - 108;
+      this.player.y = this.ch * 0.78;
     }
   }
 
   public initLevel(lvl: number): void {
     this.currentLevel = Math.max(1, Math.min(100, lvl));
     this.plan = WaveGenerator.generate(this.currentLevel, this.cw);
-    this.scrollSpeed = 50 + Math.min(30, this.currentLevel * 0.28);
-    this.scrollOffset = 0;
+    this.elapsed = 0;
+    this.trauma = 0;
+    this.enemiesKilled = 0;
 
     this.player = this.createDefaultPlayer();
     this.targetX = this.cw / 2;
     this.player.x = this.cw / 2;
 
     this.gates = [];
+    this.crates = [];
     this.obstacles = [];
     this.enemies = [];
+    this.enemyMortars = [];
     this.bullets = [];
     this.particles = [];
+    this.shockwaves = [];
     this.floatTexts = [];
 
-    // Instantiate all wave gates, obstacles, and enemies
-    this.plan.waves.forEach(w => {
-      if (w.gates) {
-        w.gates.forEach(g => this.gates.push({ ...g } as Gate));
-      }
-      if (w.obstacles) {
-        w.obstacles.forEach(o => this.obstacles.push({ ...o } as FieldObstacle));
-      }
-      if (w.enemies) {
-        w.enemies.forEach(eg => {
-          for (let i = 0; i < eg.count; i++) {
-            const laneX = eg.lane === 'LEFT' ? this.cw * 0.25 : eg.lane === 'RIGHT' ? this.cw * 0.75 : this.cw * 0.5;
-            const ey = w.spawnYOffset - i * (eg.spacingY || 45);
-            this.enemies.push(WaveGenerator.spawnEnemyInstance(eg.type, laneX, ey, this.currentLevel, this.cw));
-          }
-        });
-      }
-    });
+    // Clone queues
+    this.gateQueue = [...this.plan.gateQueue];
+    this.crateQueue = [...this.plan.crateQueue];
+    this.enemySchedule = [...this.plan.enemySchedule];
+    this.obstacleQueue = [...this.plan.obstacleQueue];
 
-    this.totalEnemiesInLevel = this.enemies.length;
-    this.enemiesLeft = this.enemies.length;
+    // Pre-spawn first gate dilemma on-screen at ch * 0.22 so player immediately sees it
+    if (this.gateQueue.length > 0) {
+      const firstTime = this.gateQueue[0].spawnTime;
+      while (this.gateQueue.length > 0 && Math.abs(this.gateQueue[0].spawnTime - firstTime) < 0.1) {
+        this.spawnGateEntity(this.gateQueue.shift()!, this.ch * 0.22);
+      }
+    }
+
     CombatEngine.updateSquadFormation(this.player);
-
     this.mode = 'READY';
     this.notifyHUD();
   }
@@ -162,18 +173,21 @@ export class GameLoop {
   public startCombat(): void {
     if (this.mode === 'READY') {
       this.mode = 'PLAYING';
+      sfx.startBGM();
     }
   }
 
   public pause(): void {
     if (this.mode === 'PLAYING') {
       this.mode = 'PAUSED';
+      sfx.pauseBGM();
     }
   }
 
   public resume(): void {
     if (this.mode === 'PAUSED') {
       this.mode = 'PLAYING';
+      sfx.resumeBGM();
     }
   }
 
@@ -181,7 +195,7 @@ export class GameLoop {
     const handleMove = (clientX: number) => {
       const rect = this.canvas.getBoundingClientRect();
       const rawX = clientX - rect.left;
-      this.targetX = Math.max(30, Math.min(this.cw - 30, rawX));
+      this.targetX = Math.max(32, Math.min(this.cw - 32, rawX));
     };
 
     this.canvas.addEventListener('pointerdown', (e) => {
@@ -200,75 +214,233 @@ export class GameLoop {
     });
   }
 
+  private spawnGateEntity(gDef: GateQueueItem, overrideY?: number): void {
+    const margin = 18;
+    const laneW = (this.cw - margin * 2 - 12) / 2;
+    const x = margin + gDef.lane * (laneW + 12) + laneW / 2;
+
+    this.gates.push({
+      id: Math.random(),
+      x,
+      y: overrideY !== undefined ? overrideY : -45,
+      w: laneW,
+      h: 50,
+      lane: gDef.lane === 0 ? 'LEFT' : 'RIGHT',
+      kind: gDef.kind,
+      val: gDef.val || 0,
+      maxVal: gDef.maxVal || 10,
+      hitsPerStep: gDef.hitsPerStep || 10,
+      chargeHits: 0,
+      lockHitsRemaining: gDef.lockHitsRemaining || 0,
+      lockHitsMax: gDef.lockHitsMax || 10,
+      unlocked: gDef.kind === 'CHARGE_ADD' || gDef.kind === 'HAZARD',
+      boostType: gDef.boostType,
+      label: gDef.label,
+      color: gDef.color,
+      hitScale: 0,
+      altarSacrificeCost: gDef.altarSacrificeCost,
+      altarWeaponReward: gDef.altarWeaponReward,
+      sliding: gDef.sliding,
+      slideSpeed: 45,
+      slideDir: 1,
+      flipPolarity: gDef.flipPolarity,
+      polarityTimer: 3.0,
+    });
+  }
+
+  private spawnCrateEntity(cDef: CrateQueueItem): void {
+    const margin = 20;
+    const laneW = (this.cw - margin * 2) / 3;
+    const x = margin + cDef.lane3 * laneW + laneW / 2;
+    this.crates.push({
+      id: Math.random(),
+      x,
+      y: -48,
+      w: Math.min(104, laneW - 8),
+      h: 48,
+      hp: cDef.hp,
+      maxHp: cDef.maxHp,
+      boostType: cDef.boostType,
+      label: cDef.label,
+      color: cDef.color,
+      hitScale: 0,
+    });
+  }
+
+  private spawnObstacleEntity(oDef: ObstacleQueueItem): void {
+    const laneX = oDef.lane === 'LEFT' ? 24 : this.cw - 24;
+    this.obstacles.push({
+      id: Math.random(),
+      type: oDef.type,
+      x: oDef.type === 'PRISM_MIRROR' ? laneX : this.cw / 2,
+      y: -50,
+      width: oDef.type === 'PRISM_MIRROR' ? 32 : 110,
+      height: oDef.type === 'PRISM_MIRROR' ? 80 : 120,
+      angleDeg: oDef.angleDeg,
+      lane: oDef.lane,
+      overclockRate: oDef.overclockRate,
+      dragFactor: oDef.dragFactor,
+      active: true,
+    });
+  }
+
+  public unlockTacticalBoost(boostType: string, x: number, y: number, color: string): void {
+    if (boostType === 'AP') {
+      this.player.buffs.apTimer = 7.5;
+      this.spawnFloatText(x, y - 24, '⚡ AP ROUNDS (2.5x vs 🛡️)!', color);
+    } else if (boostType === 'CRYO') {
+      this.player.buffs.cryoTimer = 8.0;
+      this.spawnFloatText(x, y - 24, '❄️ CRYO SLOW ACTIVE!', color);
+    } else if (boostType === 'BLAST') {
+      this.player.buffs.blastTimer = 7.5;
+      this.spawnFloatText(x, y - 24, '💥 BLAST SPLASH AoE!', color);
+    } else if (boostType === 'FIRERATE') {
+      this.player.buffs.rapidTimer = 8.0;
+      this.spawnFloatText(x, y - 24, '🔥 FIRE RATE +35%!', color);
+    } else if (boostType === 'SHIELD') {
+      this.player.shields += 2;
+      this.spawnFloatText(x, y - 24, '🛡️ +2 SQUAD SHIELDS!', color);
+    } else if (boostType === 'SNIPER') {
+      this.player.specialists.sniper += 2;
+      this.spawnFloatText(x, y - 24, '💎 +2 SNIPER SPECS!', '#06b6d4');
+      CombatEngine.updateSquadFormation(this.player);
+    } else if (boostType === 'VANGUARD') {
+      this.player.specialists.vanguard += 2;
+      this.spawnFloatText(x, y - 24, '⚡ +2 VANGUARD SPECS!', '#f97316');
+      CombatEngine.updateSquadFormation(this.player);
+    } else if (boostType === 'MORTAR') {
+      this.player.specialists.mortar += 1;
+      this.spawnFloatText(x, y - 24, '🟡 +1 EMP MORTAR SPEC!', '#eab308');
+      CombatEngine.updateSquadFormation(this.player);
+    }
+  }
+
+  public spawnFloatText(x: number, y: number, text: string, color: string): void {
+    this.floatTexts.push({
+      id: Math.random(),
+      text,
+      x,
+      y,
+      vy: -35,
+      color,
+      fontSize: 14,
+      alpha: 1.0,
+      life: 0.9,
+    });
+  }
+
+  public get enemiesLeft(): number {
+    return Math.max(0, this.plan.totalEnemies - this.enemiesKilled);
+  }
+
+  public get totalEnemiesInLevel(): number {
+    return this.plan.totalEnemies;
+  }
+
+  private damageSquad(lossCount: number, label: string): boolean {
+    const squadY = this.ch * 0.78;
+    if (this.player.shields > 0) {
+      this.player.shields--;
+      sfx.playExplosion(false);
+      this.trauma = Math.min(1.0, this.trauma + 0.20);
+      CombatEngine.createExplosionParticles(this.player.x, squadY, '#c084fc', this.particles, 14);
+      CombatEngine.createShockwave(this.player.x, squadY, '#c084fc', this.shockwaves, 48);
+      this.spawnFloatText(this.player.x, squadY - 28, '🛡️ SHIELD BLOCKED HIT!', '#c084fc');
+      return false;
+    }
+    this.player.count = Math.max(0, this.player.count - lossCount);
+    sfx.playLose();
+    this.trauma = Math.min(1.0, this.trauma + 0.30);
+    CombatEngine.createExplosionParticles(this.player.x, squadY, '#f43f5e', this.particles, 14);
+    CombatEngine.createShockwave(this.player.x, squadY, '#f43f5e', this.shockwaves, 52);
+    this.spawnFloatText(this.player.x, squadY - 28, label, '#f87171');
+    CombatEngine.updateSquadFormation(this.player);
+
+    if (this.player.count <= 0) {
+      this.mode = 'DEFEAT';
+      sfx.pauseBGM();
+      const consolation = Math.round(this.plan.coinReward * 0.25);
+      storage.recordLoss(consolation);
+      if (this.onGameOver) this.onGameOver(false, consolation, 'All soldiers in your squad were eliminated!');
+      return true;
+    }
+    return false;
+  }
+
   private notifyHUD(): void {
     if (this.onHUDUpdate) {
       const save = storage.getSave();
-      this.onHUDUpdate(this.currentLevel, this.enemiesLeft, this.totalEnemiesInLevel, save.coins);
+      const remaining = Math.max(0, this.plan.totalEnemies - this.enemiesKilled);
+      this.onHUDUpdate(this.currentLevel, remaining, this.plan.totalEnemies, save.coins);
     }
   }
 
   public update(dt: number): void {
     if (this.mode !== 'PLAYING') return;
 
-    // 1. Smooth squad lateral sliding
-    const dragSpeed = 16 * this.player.dragSpeedMultiplier;
+    this.elapsed += dt;
+
+    // Camera trauma decay
+    if (this.trauma > 0) {
+      this.trauma = Math.max(0, this.trauma - dt * 1.8);
+    }
+
+    // Active buffs timer decay
+    if (this.player.buffs.apTimer > 0) this.player.buffs.apTimer -= dt;
+    if (this.player.buffs.cryoTimer > 0) this.player.buffs.cryoTimer -= dt;
+    if (this.player.buffs.rapidTimer > 0) this.player.buffs.rapidTimer -= dt;
+    if (this.player.buffs.blastTimer > 0) this.player.buffs.blastTimer -= dt;
+
+    const squadY = this.ch * 0.78;
+    this.player.y = squadY;
+
+    // 1. Smooth squad movement toward targetX
+    const dragSpeed = 20 * this.player.dragSpeedMultiplier;
     this.player.x += (this.targetX - this.player.x) * Math.min(1.0, dragSpeed * dt);
+    this.player.x = Math.max(34, Math.min(this.cw - 34, this.player.x));
 
-    // 2. Highway road scrolling & element advancement
-    this.scrollOffset += this.scrollSpeed * dt;
+    // 2. Process Scheduled Spawns
+    while (this.gateQueue.length > 0 && this.gateQueue[0].spawnTime <= this.elapsed) {
+      this.spawnGateEntity(this.gateQueue.shift()!);
+    }
+    while (this.crateQueue.length > 0 && this.crateQueue[0].spawnTime <= this.elapsed) {
+      this.spawnCrateEntity(this.crateQueue.shift()!);
+    }
+    while (this.enemySchedule.length > 0 && this.enemySchedule[0].spawnTime <= this.elapsed) {
+      const eDef = this.enemySchedule.shift()!;
+      this.enemies.push(WaveGenerator.spawnEnemyEntity(eDef, this.cw, this.plan.scrollSpeed));
+    }
+    while (this.obstacleQueue.length > 0 && this.obstacleQueue[0].spawnTime <= this.elapsed) {
+      this.spawnObstacleEntity(this.obstacleQueue.shift()!);
+    }
 
-    this.gates.forEach(g => {
-      g.y += this.scrollSpeed * dt;
-      // Sliding gate behavior (Sector 2+)
-      if (g.sliding) {
-        g.x += (g.slideSpeed || 40) * (g.slideDir || 1) * dt;
-        if (g.x < 70) {
-          g.x = 70;
-          g.slideDir = 1;
-        } else if (g.x > this.cw - 70) {
-          g.x = this.cw - 70;
-          g.slideDir = -1;
-        }
-      }
-      // Flip-Polarity Gates (Sector 5)
-      if (g.flipPolarity) {
-        g.polarityTimer = (g.polarityTimer || 3.0) - dt;
-        if (g.polarityTimer <= 0) {
-          g.polarityTimer = 3.0;
-          g.val = -g.val;
-          sfx.playGateCharge();
-        }
-      }
-    });
-
-    this.obstacles.forEach(o => {
-      o.y += this.scrollSpeed * dt;
-    });
-
-    this.enemies.forEach(e => {
-      if (!e.active) return;
-      const effectiveSpeed = e.isSlowed ? e.speed * 0.45 : e.speed;
-      e.y += (this.scrollSpeed * 0.4 + effectiveSpeed) * dt;
-
-      if (e.isSlowed) {
-        e.slowTimer = (e.slowTimer || 2.0) - dt;
-        if (e.slowTimer <= 0) e.isSlowed = false;
-      }
-    });
-
-    // 3. Firing & Combat Engine Execution
+    // 3. Firing Volleys
     const save = storage.getSave();
-    CombatEngine.firePlayerVolleys(this.player, dt, this.bullets, save.upgrades.firepower, this.enemies);
-    CombatEngine.updateBullets(this.bullets, dt, this.enemies, this.particles);
-    CombatEngine.handleObstacleInteractions(this.player, this.obstacles, this.bullets, dt);
-    
-    CombatEngine.handleGateInteractions(
+    CombatEngine.firePlayerVolleys(
       this.player, 
-      this.gates, 
+      dt, 
       this.bullets, 
-      this.floatTexts, 
+      save.upgrades.firepower, 
+      save.upgrades.fireRate, 
+      save.upgrades.armorPierce, 
+      this.enemies
+    );
+
+    // 4. Update Bullets & Obstacle Interactions
+    CombatEngine.updateBullets(this.bullets, dt, this.enemies, this.particles, (amt) => {
+      this.trauma = Math.min(1.0, this.trauma + amt);
+    }, this.shockwaves);
+
+    CombatEngine.handleObstacleInteractions(this.player, this.obstacles, this.bullets, dt);
+
+    CombatEngine.handleGateAndCrateHits(
+      this.gates, 
+      this.crates, 
+      this.bullets, 
       this.particles, 
-      save.stats
+      this.floatTexts,
+      (type, x, y, col) => this.unlockTacticalBoost(type, x, y, col),
+      this.shockwaves
     );
 
     CombatEngine.handleEnemyInteractions(
@@ -278,43 +450,223 @@ export class GameLoop {
       this.particles, 
       this.floatTexts, 
       dt, 
-      save.stats
+      save.upgrades.armorPierce,
+      (amt) => { this.trauma = Math.min(1.0, this.trauma + amt); },
+      save.stats,
+      this.shockwaves
     );
 
-    // 4. Update Particles & Floating Text
+    // 5. Update Descending Gates
+    const collectHalfW = Math.min(48, 16 + Math.sqrt(this.player.count) * 3.5);
+    for (let i = this.gates.length - 1; i >= 0; i--) {
+      const g = this.gates[i];
+      g.y += this.plan.scrollSpeed * dt;
+      if (g.hitScale > 0) g.hitScale = Math.max(0, g.hitScale - dt * 6);
+
+      // Traversal through gate
+      if (Math.abs(g.y - squadY) <= 22 && Math.abs(g.x - this.player.x) <= g.w / 2 + collectHalfW * 0.4) {
+        if ((g.kind === 'LOCKED_MULT' || g.kind === 'BUFF_GATE') && !g.unlocked) {
+          this.spawnFloatText(this.player.x, squadY - 28, '🔒 LOCKED GATE (NO EFFECT)', '#94a3b8');
+        } else if (g.kind === 'LOCKED_MULT') {
+          const added = Math.min(40, Math.round(this.player.count * (g.val - 1)));
+          this.player.count = Math.min(220, this.player.count + added);
+          sfx.playGateCharge();
+          CombatEngine.updateSquadFormation(this.player);
+          this.spawnFloatText(this.player.x, squadY - 28, `x${g.val} SQUAD!`, '#34d399');
+        } else if (g.kind === 'BUFF_GATE') {
+          if (g.boostType) this.unlockTacticalBoost(g.boostType, g.x, g.y, g.color || '#fde047');
+        } else if (g.kind === 'ALTAR') {
+          const cost = g.altarSacrificeCost || 15;
+          const actualDeduct = Math.min(this.player.count - 1, cost);
+          this.player.count = Math.max(1, this.player.count - actualDeduct);
+          save.stats.altarsUsed++;
+          if (g.altarWeaponReward === 'laserWeapon') {
+            this.player.buffs.laserWeapon = true;
+            this.spawnFloatText(this.player.x, squadY - 30, '⚡ LASER EVOLVED!', '#c084fc');
+          } else {
+            this.player.buffs.homingMissiles = true;
+            this.spawnFloatText(this.player.x, squadY - 30, '🚀 HOMING MISSILES!', '#f43f5e');
+          }
+          sfx.playAltarSacrifice();
+          CombatEngine.createShockwave(this.player.x, squadY, '#c084fc', this.shockwaves, 72);
+          CombatEngine.updateSquadFormation(this.player);
+        } else if (g.kind === 'CHARGE_ADD' || g.kind === 'HAZARD' || g.kind === 'QUANTUM') {
+          const delta = g.val;
+          if (delta > 0) {
+            this.player.count = Math.min(220, this.player.count + delta);
+            sfx.playGateCharge();
+            this.spawnFloatText(this.player.x, squadY - 28, `+${delta} SQUAD`, '#38bdf8');
+          } else if (delta < 0) {
+            if (this.damageSquad(Math.abs(delta), `HAZARD ${delta}!`)) return;
+          }
+          CombatEngine.updateSquadFormation(this.player);
+        }
+
+        this.gates.splice(i, 1);
+        continue;
+      }
+
+      if (g.y > this.ch + 45) this.gates.splice(i, 1);
+    }
+
+    // 6. Update Descending Crates
+    for (let i = this.crates.length - 1; i >= 0; i--) {
+      const c = this.crates[i];
+      c.y += this.plan.scrollSpeed * 0.9 * dt;
+      if (c.hitScale > 0) c.hitScale = Math.max(0, c.hitScale - dt * 6);
+
+      if (Math.abs(c.y - squadY) <= 20 && Math.abs(c.x - this.player.x) <= c.w / 2 + 12) {
+        this.crates.splice(i, 1);
+        if (this.damageSquad(2, 'CRATE COLLISION -2!')) return;
+        continue;
+      }
+      if (c.y > this.ch + 50) this.crates.splice(i, 1);
+    }
+
+    // 7. Update Obstacles
+    for (let i = this.obstacles.length - 1; i >= 0; i--) {
+      const o = this.obstacles[i];
+      o.y += this.plan.scrollSpeed * dt;
+      if (o.y > this.ch + 60) this.obstacles.splice(i, 1);
+    }
+
+    // 8. Update Enemies & Mortar Projectiles
+    for (let i = this.enemies.length - 1; i >= 0; i--) {
+      const e = this.enemies[i];
+      if (!e.active) {
+        this.enemies.splice(i, 1);
+        this.enemiesKilled++;
+        continue;
+      }
+
+      if (e.slowTimer > 0) e.slowTimer -= dt;
+      const cryoMult = e.slowTimer > 0 ? 0.55 : 1.0;
+
+      // Boss lateral swaying
+      if (e.isBoss) {
+        e.bossPhase += dt * 1.6;
+        e.x += Math.sin(e.bossPhase) * 38 * dt;
+        e.x = Math.max(48, Math.min(this.cw - 48, e.x));
+      }
+
+      // Artillery mortar shooting
+      if (e.type === 'SHOOTER' || e.isBoss) {
+        e.shootCooldown -= dt;
+        if (e.shootCooldown <= 0 && e.y > 40 && e.y < squadY - 120) {
+          e.shootCooldown = e.type === 'TITAN' ? 1.75 : e.type === 'SHOOTER' ? 2.5 : 2.1;
+          const targetX = this.player.x;
+          const dx = targetX - e.x;
+          const dy = squadY - e.y;
+          const dist = Math.hypot(dx, dy) || 1;
+          const spd = 215;
+          this.enemyMortars.push({
+            x: e.x,
+            y: e.y + e.r,
+            targetX,
+            vx: (dx / dist) * spd * 0.68,
+            vy: spd,
+            squadLoss: e.type === 'TITAN' ? 4 : 2,
+          });
+        }
+      }
+
+      e.y += e.speed * cryoMult * dt;
+
+      // Defensive Perimeter Breach Check
+      if (e.y + e.r >= squadY - 4) {
+        if (e.isBoss) {
+          this.mode = 'DEFEAT';
+          sfx.pauseBGM();
+          sfx.playLose();
+          const consolation = Math.round(this.plan.coinReward * 0.25);
+          storage.recordLoss(consolation);
+          if (this.onGameOver) this.onGameOver(false, consolation, `${e.name || e.type} breached your defensive perimeter!`);
+          return;
+        }
+
+        if (e.type === 'MINE') {
+          if (Math.abs(e.x - this.player.x) < 78) {
+            const blastLoss = Math.max(3, Math.ceil(this.player.count * 0.35));
+            if (this.damageSquad(blastLoss, `💣 MINE BLAST -${blastLoss}!`)) return;
+          }
+          this.enemies.splice(i, 1);
+          this.enemiesKilled++;
+          continue;
+        }
+
+        const soldierCost = Math.max(2, Math.ceil(e.hp / (14 + save.upgrades.firepower * 3)));
+        if (this.player.count > soldierCost) {
+          if (this.damageSquad(soldierCost, `BREACH CLASH -${soldierCost} 👥!`)) return;
+          this.enemies.splice(i, 1);
+          this.enemiesKilled++;
+        } else {
+          this.mode = 'DEFEAT';
+          sfx.pauseBGM();
+          sfx.playLose();
+          const consolation = Math.round(this.plan.coinReward * 0.25);
+          storage.recordLoss(consolation);
+          if (this.onGameOver) this.onGameOver(false, consolation, 'Perimeter overrun!');
+          return;
+        }
+      }
+    }
+
+    // 9. Update Enemy Mortar Shells
+    const hitRadius = Math.min(44, 14 + Math.sqrt(this.player.count) * 3.2);
+    for (let i = this.enemyMortars.length - 1; i >= 0; i--) {
+      const em = this.enemyMortars[i];
+      em.x += em.vx * dt;
+      em.y += em.vy * dt;
+
+      if (Math.abs(em.y - squadY) < 16 && Math.abs(em.x - this.player.x) < hitRadius) {
+        this.enemyMortars.splice(i, 1);
+        CombatEngine.createShockwave(this.player.x, squadY, '#ef4444', this.shockwaves, 64);
+        if (this.damageSquad(em.squadLoss, '🎯 HIT BY MORTAR!')) return;
+        continue;
+      }
+      if (em.y > this.ch + 20) this.enemyMortars.splice(i, 1);
+    }
+
+    // 10. Win Condition
+    const remainingEnemies = this.plan.totalEnemies - this.enemiesKilled;
+    if (remainingEnemies <= 0 && this.enemySchedule.length === 0 && this.enemies.length === 0) {
+      this.mode = 'VICTORY';
+      sfx.pauseBGM();
+      sfx.playWin();
+      storage.recordWin(this.currentLevel, this.plan.coinReward);
+      if (this.onGameOver) this.onGameOver(true, this.plan.coinReward);
+    }
+
+    // 11. Particles, Shockwaves, Enemies HitFlash & Floating Texts
+    for (const e of this.enemies) {
+      if (e.hitFlash > 0) e.hitFlash = Math.max(0, e.hitFlash - dt * 6);
+    }
+
+    for (let i = this.shockwaves.length - 1; i >= 0; i--) {
+      const sw = this.shockwaves[i];
+      sw.radius += (sw.maxRadius - sw.radius) * Math.min(1.0, dt * 10);
+      sw.alpha -= dt * sw.decay;
+      if (sw.alpha <= 0) this.shockwaves.splice(i, 1);
+    }
+
     for (let i = this.particles.length - 1; i >= 0; i--) {
       const p = this.particles[i];
       p.x += p.vx * dt;
       p.y += p.vy * dt;
-      p.alpha -= p.decay * dt;
-      if (p.alpha <= 0) this.particles.splice(i, 1);
+      p.life -= dt;
+      p.alpha = Math.max(0, p.life / p.maxLife);
+      if (p.life <= 0) this.particles.splice(i, 1);
     }
 
     for (let i = this.floatTexts.length - 1; i >= 0; i--) {
       const ft = this.floatTexts[i];
       ft.y += ft.vy * dt;
-      ft.alpha -= dt * 1.4;
-      if (ft.alpha <= 0) this.floatTexts.splice(i, 1);
+      ft.life -= dt;
+      ft.alpha = Math.max(0, ft.life / 0.9);
+      if (ft.life <= 0) this.floatTexts.splice(i, 1);
     }
 
-    // 5. Update Remaining Enemies
-    const activeRemaining = this.enemies.filter(e => e.active).length;
-    this.enemiesLeft = activeRemaining;
     this.notifyHUD();
-
-    // 6. Win / Defeat Conditions
-    if (this.player.count <= 0) {
-      this.mode = 'DEFEAT';
-      sfx.playLose();
-      const consolation = Math.round(this.plan.coinReward * 0.25);
-      storage.recordLoss(consolation);
-      if (this.onGameOver) this.onGameOver(false, consolation, 'Squad wiped out! Dodge artillery and link units.');
-    } else if (activeRemaining === 0) {
-      this.mode = 'VICTORY';
-      sfx.playWin();
-      storage.recordWin(this.currentLevel, this.plan.coinReward);
-      if (this.onGameOver) this.onGameOver(true, this.plan.coinReward);
-    }
   }
 
   public render(): void {
@@ -323,13 +675,17 @@ export class GameLoop {
       this.cw,
       this.ch,
       this.plan.biome,
-      this.scrollOffset,
+      this.elapsed,
+      this.trauma,
       this.player,
       this.gates,
+      this.crates,
       this.obstacles,
       this.enemies,
+      this.enemyMortars,
       this.bullets,
       this.particles,
+      this.shockwaves,
       this.floatTexts
     );
   }
@@ -337,7 +693,7 @@ export class GameLoop {
   public start(): void {
     this.lastTS = performance.now();
     const frame = (now: number) => {
-      const dt = Math.min(0.05, (now - this.lastTS) / 1000);
+      const dt = Math.min(0.04, (now - this.lastTS) / 1000);
       this.lastTS = now;
       this.update(dt);
       this.render();

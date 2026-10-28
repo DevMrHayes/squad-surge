@@ -5,9 +5,12 @@ import {
   SpecialistType, 
   Bullet, 
   Gate, 
+  Crate,
   FieldObstacle, 
   Enemy, 
+  EnemyMortarShell,
   Particle, 
+  Shockwave,
   FloatingText,
   BossArmorPlate 
 } from '../types/game';
@@ -18,12 +21,10 @@ export class CombatEngine {
     const total = Math.max(1, player.count);
     const members: SquadMember[] = [];
 
-    // Columns and rows arranged in an aerodynamic cluster
     const cols = Math.min(10, Math.ceil(Math.sqrt(total * 1.5)));
     const spacingX = 9;
     const spacingY = 10;
 
-    // Distribute specialists
     const snipers = player.specialists.sniper || 0;
     const vanguards = player.specialists.vanguard || 0;
     const mortars = player.specialists.mortar || 0;
@@ -72,36 +73,44 @@ export class CombatEngine {
     dt: number, 
     bullets: Bullet[], 
     firepowerLvl: number,
+    fireRateLvl: number,
+    armorPierceLvl: number,
     enemies: Enemy[]
   ): void {
-    player.fireTimer -= dt * player.fireRateMultiplier;
+    const permFireRate = 1 + (fireRateLvl - 1) * 0.10;
+    const tempFireRate = player.buffs.rapidTimer > 0 ? 1.35 : 1.0;
+    const interval = 0.20 / (permFireRate * tempFireRate * player.fireRateMultiplier);
+
+    player.fireTimer += dt;
     player.sniperTimer -= dt;
     player.vanguardTimer -= dt;
     player.mortarTimer -= dt;
 
-    const baseDmg = 12 + firepowerLvl * 4;
-    const excessMultiplier = player.count > 14 ? 1 + (player.count - 14) * 0.05 : 1.0;
-    const dmg = Math.round(baseDmg * excessMultiplier * (player.buffs.apTimer > 0 ? 1.6 : 1.0));
+    if (player.fireTimer >= interval) {
+      player.fireTimer = 0;
 
-    // 1. Standard / Rapid Fire Volley
-    const interval = player.buffs.rapidTimer > 0 ? 0.08 : 0.16;
-    if (player.fireTimer <= 0) {
-      player.fireTimer = interval;
-      const barrelCount = Math.min(14, Math.max(1, Math.min(player.count, 12)));
-      const spread = 8;
-      const startX = -((barrelCount - 1) * spread) / 2;
+      // Sub-linear squad power formula
+      const streamCount = Math.min(10, Math.max(1, Math.ceil(Math.sqrt(player.count * 1.1))));
+      const upgPower = 1 + (firepowerLvl - 1) * 0.18;
+      const effectiveSquadPower = Math.pow(player.count, 0.78) * 3.1 * upgPower;
+      const dmgPerBullet = Math.max(1.5, effectiveSquadPower / streamCount);
+      const gateChargePerBullet = 1.35 / streamCount;
 
-      for (let b = 0; b < barrelCount; b++) {
+      const spread = 8.5;
+      const startX = -((streamCount - 1) * spread) / 2;
+
+      for (let b = 0; b < streamCount; b++) {
         const bx = player.x + startX + b * spread;
         bullets.push({
           id: Math.random(),
           x: bx,
           y: player.y - 12,
           vx: 0,
-          vy: -620,
-          damage: dmg,
+          vy: -680,
+          damage: dmgPerBullet,
+          gateCharge: gateChargePerBullet,
           radius: 3.5,
-          color: player.buffs.cryoTimer > 0 ? '#67e8f9' : player.buffs.apTimer > 0 ? '#fb923c' : '#38bdf8',
+          color: player.buffs.cryoTimer > 0 ? '#67e8f9' : player.buffs.apTimer > 0 ? '#fde047' : '#38bdf8',
           isCryo: player.buffs.cryoTimer > 0,
           isBlast: player.buffs.blastTimer > 0,
           isPierce: player.buffs.apTimer > 0,
@@ -118,8 +127,9 @@ export class CombatEngine {
           x: player.x,
           y: player.y - 14,
           vx: 0,
-          vy: -880,
-          damage: Math.round(dmg * 2.2),
+          vy: -920,
+          damage: dmgPerBullet * 2.8,
+          gateCharge: gateChargePerBullet * 1.5,
           radius: 6,
           color: '#c084fc',
           isPierce: true,
@@ -138,8 +148,9 @@ export class CombatEngine {
             x: player.x + (Math.random() < 0.5 ? -18 : 18),
             y: player.y - 8,
             vx: (Math.random() - 0.5) * 80,
-            vy: -480,
-            damage: Math.round(dmg * 1.8),
+            vy: -520,
+            damage: dmgPerBullet * 2.2,
+            gateCharge: gateChargePerBullet * 1.2,
             radius: 4,
             color: '#f43f5e',
             isHoming: true,
@@ -150,10 +161,10 @@ export class CombatEngine {
         }
       }
 
-      sfx.playLaser(player.buffs.rapidTimer > 0 ? 1040 : 840);
+      sfx.playLaser(player.buffs.rapidTimer > 0 ? 760 : 580);
     }
 
-    // 2. Cyan Sniper Specialist Railgun (Passes through gates/crates)
+    // Cyan Sniper Specialist Railgun (Passes through gates/crates)
     if (player.specialists.sniper > 0 && player.sniperTimer <= 0) {
       player.sniperTimer = 1.4;
       const count = Math.min(5, player.specialists.sniper);
@@ -164,10 +175,11 @@ export class CombatEngine {
           y: player.y - 16,
           vx: 0,
           vy: -950,
-          damage: Math.round(dmg * 3.5),
+          damage: (15 + firepowerLvl * 5) * 3.5,
+          gateCharge: 2.0,
           radius: 4.5,
           color: '#06b6d4',
-          isPierce: true, // Pierces through gates & enemies!
+          isPierce: true,
           isFromPlayer: true,
           active: true,
         });
@@ -175,7 +187,7 @@ export class CombatEngine {
       sfx.playSniperRail();
     }
 
-    // 3. Orange Vanguard Point-Blank Shotgun
+    // Orange Vanguard Point-Blank Shotgun
     if (player.specialists.vanguard > 0 && player.vanguardTimer <= 0) {
       player.vanguardTimer = 0.95;
       const spreadAngles = [-0.22, -0.11, 0, 0.11, 0.22];
@@ -184,9 +196,10 @@ export class CombatEngine {
           id: Math.random(),
           x: player.x,
           y: player.y - 10,
-          vx: Math.sin(ang) * 520,
-          vy: -Math.cos(ang) * 520,
-          damage: Math.round(dmg * 1.5),
+          vx: Math.sin(ang) * 540,
+          vy: -Math.cos(ang) * 540,
+          damage: (12 + firepowerLvl * 3) * 1.6,
+          gateCharge: 1.2,
           radius: 5,
           color: '#f97316',
           isBlast: true,
@@ -197,10 +210,10 @@ export class CombatEngine {
       sfx.playShotgun();
     }
 
-    // 4. Yellow EMP Mortar (Arcs over gates directly onto backline drones/artillery)
+    // Yellow EMP Mortar (Arcs over gates directly onto backline drones/artillery)
     if (player.specialists.mortar > 0 && player.mortarTimer <= 0) {
       player.mortarTimer = 2.4;
-      const target = enemies.find(e => e.active && (e.type === 'HEALER_DRONE' || e.type === 'ARTILLERY' || e.isBoss));
+      const target = enemies.find(e => e.active && (e.type === 'HEALER_DRONE' || e.type === 'SHOOTER' || e.isBoss));
       const targetX = target ? target.x : player.x + (Math.random() - 0.5) * 140;
       const targetY = target ? target.y : player.y - 280;
 
@@ -210,7 +223,8 @@ export class CombatEngine {
         y: player.y - 12,
         vx: 0,
         vy: 0,
-        damage: Math.round(dmg * 3.2),
+        damage: (14 + firepowerLvl * 4) * 3.4,
+        gateCharge: 2.5,
         radius: 6.5,
         color: '#eab308',
         isMortar: true,
@@ -233,7 +247,9 @@ export class CombatEngine {
     bullets: Bullet[], 
     dt: number, 
     enemies: Enemy[], 
-    particles: Particle[]
+    particles: Particle[],
+    addTrauma: (amt: number) => void,
+    shockwaves?: Shockwave[]
   ): void {
     for (let i = bullets.length - 1; i >= 0; i--) {
       const b = bullets[i];
@@ -242,21 +258,21 @@ export class CombatEngine {
         continue;
       }
 
-      // Mortar projectile curve
       if (b.isMortar && b.mortarArc) {
         b.mortarArc.progress += dt / b.mortarArc.duration;
         const p = b.mortarArc.progress;
         if (p >= 1.0) {
-          // Detonate at target
           b.active = false;
           b.x = b.mortarArc.targetX;
           b.y = b.mortarArc.targetY;
-          this.createExplosionParticles(b.x, b.y, b.color, particles, 18);
+          this.createExplosionParticles(b.x, b.y, b.color, particles, 18, true);
+          if (shockwaves) this.createShockwave(b.x, b.y, b.color, shockwaves, 52);
+          addTrauma(0.18);
           sfx.playExplosion(false);
-          // AoE damage
           enemies.forEach(e => {
-            if (e.active && Math.hypot(e.x - b.x, e.y - b.y) <= 65) {
+            if (e.active && Math.hypot(e.x - b.x, e.y - b.y) <= 68) {
               e.hp -= b.damage;
+              e.hitFlash = 1;
             }
           });
           continue;
@@ -268,7 +284,6 @@ export class CombatEngine {
         continue;
       }
 
-      // Homing guidance
       if (b.isHoming && b.targetEnemyId) {
         const target = enemies.find(e => e.id === b.targetEnemyId && e.active);
         if (target) {
@@ -279,8 +294,8 @@ export class CombatEngine {
             b.vx += (dx / dist) * 720 * dt;
             b.vy += (dy / dist) * 720 * dt;
             const spd = Math.hypot(b.vx, b.vy);
-            b.vx = (b.vx / spd) * 520;
-            b.vy = (b.vy / spd) * 520;
+            b.vx = (b.vx / spd) * 540;
+            b.vy = (b.vy / spd) * 540;
           }
         }
       }
@@ -288,7 +303,6 @@ export class CombatEngine {
       b.x += b.vx * dt;
       b.y += b.vy * dt;
 
-      // Screen boundary removal
       if (b.y < -50 || b.y > 900 || b.x < -20 || b.x > 450) {
         b.active = false;
       }
@@ -307,7 +321,6 @@ export class CombatEngine {
     obstacles.forEach(obs => {
       if (!obs.active) return;
 
-      // Speed / Hazard Strips zone detection
       if (obs.type === 'SPEED_STRIP' || obs.type === 'HAZARD_STRIP') {
         const inZone = 
           player.x >= obs.x - obs.width / 2 && 
@@ -324,7 +337,6 @@ export class CombatEngine {
         }
       }
 
-      // Prism Mirror Ricochet Physics (Phase 1)
       if (obs.type === 'PRISM_MIRROR') {
         bullets.forEach(b => {
           if (!b.active || !b.isFromPlayer || (b.ricochetsLeft ?? 0) <= 0) return;
@@ -337,11 +349,10 @@ export class CombatEngine {
 
           if (collides) {
             b.ricochetsLeft = (b.ricochetsLeft || 2) - 1;
-            // Bounce across highway: reverse and angle vx
             const bounceDirection = obs.angleDeg > 0 ? 1 : -1;
-            b.vx = bounceDirection * 340;
-            b.vy = -450;
-            b.color = '#f59e0b'; // Amber energize
+            b.vx = bounceDirection * 360;
+            b.vy = -460;
+            b.color = '#f59e0b';
             sfx.playRicochet();
           }
         });
@@ -349,128 +360,87 @@ export class CombatEngine {
     });
   }
 
-  public static handleGateInteractions(
-    player: PlayerState, 
-    gates: Gate[], 
-    bullets: Bullet[], 
-    floatTexts: FloatingText[], 
+  public static handleGateAndCrateHits(
+    gates: Gate[],
+    crates: Crate[],
+    bullets: Bullet[],
     particles: Particle[],
-    statsTracker: { gatesCharged: number; altarsUsed: number }
+    floatTexts: FloatingText[],
+    unlockBoost: (boostType: string, x: number, y: number, color: string) => void,
+    shockwaves?: Shockwave[]
   ): void {
-    gates.forEach(g => {
-      if (!g.isUnlocked || g.isConsumed) return;
+    bullets.forEach(b => {
+      if (!b.active || !b.isFromPlayer || b.isPierce) return;
 
-      // Bullet absorption & gate charging
-      bullets.forEach(b => {
-        if (!b.active || !b.isFromPlayer || b.isPierce) return;
-
-        const collides = 
-          b.x >= g.x - g.width / 2 && 
-          b.x <= g.x + g.width / 2 && 
-          b.y >= g.y - g.height / 2 && 
-          b.y <= g.y + g.height / 2;
-
-        if (collides) {
+      // 1. Check Gate Hits
+      for (const g of gates) {
+        if (
+          b.y <= g.y + g.h / 2 &&
+          b.y >= g.y - g.h / 2 &&
+          Math.abs(b.x - g.x) <= g.w / 2
+        ) {
           b.active = false;
-          // Locked gate shield
-          if (g.lockHp > 0) {
-            g.lockHp -= b.damage;
-            if (g.lockHp <= 0) {
-              g.lockHp = 0;
-              sfx.playExplosion(false);
-            }
-            return;
-          }
+          g.hitScale = 1.0;
+          this.createExplosionParticles(b.x, b.y, g.color || '#38bdf8', particles, 4, true);
 
-          // Math charge increment
-          if (g.type === 'MATH' || g.type === 'QUANTUM') {
-            g.chargeHits++;
-            if (g.chargeHits >= g.hitsPerStep) {
-              g.chargeHits = 0;
-              if (g.val < g.maxVal) {
-                g.val++;
-                statsTracker.gatesCharged++;
+          if (g.kind === 'LOCKED_MULT' || g.kind === 'BUFF_GATE') {
+            if (!g.unlocked) {
+              g.lockHitsRemaining = Math.max(0, g.lockHitsRemaining - b.gateCharge * 3.1);
+              if (g.lockHitsRemaining <= 0) {
+                g.unlocked = true;
                 sfx.playGateCharge();
+                this.createExplosionParticles(g.x, g.y, '#34d399', particles, 14);
+                if (shockwaves) this.createShockwave(g.x, g.y, '#34d399', shockwaves, 64);
                 floatTexts.push({
                   id: Math.random(),
-                  text: `+1 GATE`,
+                  text: '🔓 UNLOCKED!',
                   x: g.x,
-                  y: g.y - 16,
+                  y: g.y - 18,
                   vy: -35,
-                  color: '#38bdf8',
+                  color: '#34d399',
                   fontSize: 14,
                   alpha: 1.0,
-                  life: 0.6,
+                  life: 0.8,
                 });
               }
             }
+          } else if (g.kind === 'CHARGE_ADD' || g.kind === 'HAZARD' || g.kind === 'QUANTUM') {
+            if (g.val < g.maxVal) {
+              g.chargeHits += b.gateCharge * 2.9;
+              while (g.chargeHits >= g.hitsPerStep && g.val < g.maxVal) {
+                g.chargeHits -= g.hitsPerStep;
+                g.val += 1;
+                sfx.playGateCharge();
+                if (shockwaves && g.val === g.maxVal) {
+                  this.createShockwave(g.x, g.y, g.val > 0 ? '#38bdf8' : '#f43f5e', shockwaves, 48);
+                }
+              }
+            }
           }
-        }
-      });
-
-      // Squad traversal through gate
-      const squadCollides = 
-        Math.abs(player.x - g.x) < g.width / 2 + 18 && 
-        Math.abs(player.y - g.y) < g.height / 2 + 14;
-
-      if (squadCollides) {
-        g.isConsumed = true;
-        this.createExplosionParticles(g.x, g.y, '#38bdf8', particles, 14);
-
-        if (g.type === 'ALTAR') {
-          // Sacrifice / Conversion Altar (Phase 1)
-          const cost = g.altarSacrificeCost || 15;
-          const actualDeduct = Math.min(player.count - 1, cost);
-          player.count = Math.max(1, player.count - actualDeduct);
-          statsTracker.altarsUsed++;
-
-          if (g.altarWeaponReward === 'laserWeapon') {
-            player.buffs.laserWeapon = true;
-            floatTexts.push({
-              id: Math.random(),
-              text: `⚡ LASER EVOLVED!`,
-              x: player.x,
-              y: player.y - 30,
-              vy: -45,
-              color: '#c084fc',
-              fontSize: 16,
-              alpha: 1.0,
-              life: 1.2,
-            });
-          } else {
-            player.buffs.homingMissiles = true;
-            floatTexts.push({
-              id: Math.random(),
-              text: `🚀 HOMING MISSILES!`,
-              x: player.x,
-              y: player.y - 30,
-              vy: -45,
-              color: '#f43f5e',
-              fontSize: 16,
-              alpha: 1.0,
-              life: 1.2,
-            });
-          }
-          sfx.playAltarSacrifice();
-          this.updateSquadFormation(player);
           return;
         }
+      }
 
-        // Armory Crate Specialist Morphs (Phase 3)
-        if (g.type === 'CRATE' && g.boostKey) {
-          if (g.boostKey === 'sniper') player.specialists.sniper += 2;
-          else if (g.boostKey === 'vanguard') player.specialists.vanguard += 2;
-          else if (g.boostKey === 'mortar') player.specialists.mortar += 1;
-          sfx.playWin();
-          this.updateSquadFormation(player);
+      // 2. Check Armory Crate Hits
+      for (let j = crates.length - 1; j >= 0; j--) {
+        const c = crates[j];
+        if (
+          b.y <= c.y + c.h / 2 &&
+          b.y >= c.y - c.h / 2 &&
+          Math.abs(b.x - c.x) <= c.w / 2
+        ) {
+          b.active = false;
+          c.hp -= b.damage;
+          c.hitScale = 1.0;
+          this.createExplosionParticles(b.x, b.y, c.color, particles, 4, true);
+          if (c.hp <= 0) {
+            unlockBoost(c.boostType, c.x, c.y, c.color);
+            sfx.playExplosion(false);
+            if (shockwaves) this.createShockwave(c.x, c.y, c.color, shockwaves, 54);
+            crates.splice(j, 1);
+          }
           return;
         }
-
-        // Standard Math Gate multiplier
-        const gained = g.op === '+' ? g.val : Math.round(player.count * (g.val - 1));
-        player.count = Math.min(250, player.count + gained);
-        this.updateSquadFormation(player);
-        sfx.playGateCharge();
       }
     });
   }
@@ -482,7 +452,10 @@ export class CombatEngine {
     particles: Particle[], 
     floatTexts: FloatingText[],
     dt: number,
-    statsTracker: { totalKills: number; bossesDefeated: number; ricochetKills: number }
+    armorPierceLvl: number,
+    addTrauma: (amt: number) => void,
+    statsTracker: { totalKills: number; bossesDefeated: number; ricochetKills: number },
+    shockwaves?: Shockwave[]
   ): void {
     // 1. Synergy: Shield Bearer links adjacent allies
     const shieldBearers = enemies.filter(e => e.active && e.type === 'SHIELD_BEARER');
@@ -514,10 +487,11 @@ export class CombatEngine {
     bullets.forEach(b => {
       if (!b.active || !b.isFromPlayer) return;
 
-      enemies.forEach(e => {
-        if (!e.active) return;
+      for (let j = enemies.length - 1; j >= 0; j--) {
+        const e = enemies[j];
+        if (!e.active) continue;
 
-        // Check Boss Armor Plates first (Phase 2)
+        // Check Boss Armor Plates first
         if (e.isBoss && e.armorPlates) {
           for (const plate of e.armorPlates) {
             if (!plate.broken) {
@@ -526,11 +500,13 @@ export class CombatEngine {
               if (Math.abs(b.x - px) <= plate.w / 2 && Math.abs(b.y - py) <= plate.h / 2) {
                 b.active = false;
                 plate.hp -= b.damage;
-                this.createExplosionParticles(b.x, b.y, '#f59e0b', particles, 4);
+                this.createExplosionParticles(b.x, b.y, '#f59e0b', particles, 4, true);
                 if (plate.hp <= 0) {
                   plate.broken = true;
+                  addTrauma(0.24);
                   sfx.playExplosion(true);
-                  this.createExplosionParticles(px, py, '#f97316', particles, 16);
+                  this.createExplosionParticles(px, py, '#f97316', particles, 18);
+                  if (shockwaves) this.createShockwave(px, py, '#f97316', shockwaves, 48);
                 }
                 return;
               }
@@ -539,24 +515,43 @@ export class CombatEngine {
         }
 
         // Hitbox collision
-        const hit = Math.abs(b.x - e.x) <= e.width / 2 && Math.abs(b.y - e.y) <= e.height / 2;
-        if (hit) {
+        const dx = b.x - e.x;
+        const dy = b.y - e.y;
+        if (dx * dx + dy * dy <= (e.r + 5) * (e.r + 5)) {
           if (!b.isPierce) b.active = false;
 
-          // Shield immunity check (unless splash or pierce)
+          // Shield immunity
           if (e.shielded && !b.isBlast && !b.isLaser) {
             this.createExplosionParticles(b.x, b.y, '#a855f7', particles, 4);
             return;
           }
 
-          // Damage application
-          e.hp -= b.damage;
-          if (b.isCryo) {
-            e.isSlowed = true;
-            e.slowTimer = 2.0;
+          // Armored Brute calculation
+          let dmgMult = 1.0;
+          if (e.armored) {
+            const permPierceBonus = (armorPierceLvl - 1) * 0.12;
+            dmgMult = player.buffs.apTimer > 0 ? (2.5 + permPierceBonus) : Math.min(1.0, 0.40 + permPierceBonus);
           }
 
-          this.createExplosionParticles(b.x, b.y, b.color, particles, 3);
+          e.hp -= b.damage * dmgMult;
+          e.hitFlash = 1;
+
+          if (b.isCryo) {
+            e.slowTimer = 2.6;
+          }
+
+          this.createExplosionParticles(b.x, b.y, b.color, particles, 4, true);
+
+          // Splash Blast AoE
+          if (player.buffs.blastTimer > 0 || b.isBlast) {
+            for (let k = 0; k < enemies.length; k++) {
+              const other = enemies[k];
+              if (other.active && other !== e && Math.hypot(other.x - e.x, other.y - e.y) < 56) {
+                other.hp -= b.damage * 0.45;
+                other.hitFlash = 0.6;
+              }
+            }
+          }
 
           // Enemy Death
           if (e.hp <= 0) {
@@ -565,28 +560,48 @@ export class CombatEngine {
             if ((b.ricochetsLeft ?? 2) < 2) statsTracker.ricochetKills++;
             if (e.isBoss) statsTracker.bossesDefeated++;
 
-            this.createExplosionParticles(e.x, e.y, e.isBoss ? '#ef4444' : '#38bdf8', particles, e.isBoss ? 28 : 12);
+            this.createExplosionParticles(e.x, e.y, e.isBoss ? '#ef4444' : e.color, particles, e.isBoss ? 28 : 12);
+            if (shockwaves && e.isBoss) this.createShockwave(e.x, e.y, '#ef4444', shockwaves, 100, 5.0);
             sfx.playExplosion(e.isBoss);
 
-            // Mine detonation AoE damage back to nearby enemies (or Boss!)
-            if (e.type === 'EXPLOSIVE_MINE') {
-              enemies.forEach(nearby => {
-                if (nearby.active && nearby.id !== e.id && Math.hypot(nearby.x - e.x, nearby.y - e.y) <= 110) {
-                  nearby.hp -= 220;
-                }
+            // Explosive Mine detonation AoE
+            if (e.type === 'MINE') {
+              addTrauma(0.25);
+              sfx.playExplosion(true);
+              this.createExplosionParticles(e.x, e.y, '#fb923c', particles, 24);
+              if (shockwaves) this.createShockwave(e.x, e.y, '#fb923c', shockwaves, 85, 4.5);
+              floatTexts.push({
+                id: Math.random(),
+                text: '💥 MINE DETONATED!',
+                x: e.x,
+                y: e.y,
+                vy: -35,
+                color: '#fb923c',
+                fontSize: 14,
+                alpha: 1.0,
+                life: 0.8,
               });
+              for (let k = 0; k < enemies.length; k++) {
+                const other = enemies[k];
+                if (other.active && other !== e && Math.hypot(other.x - e.x, other.y - e.y) < 95) {
+                  other.hp -= e.maxHp * 2.4;
+                  other.hitFlash = 1;
+                }
+              }
             }
           }
+          return;
         }
-      });
+      }
     });
 
-    // 4. Boss Phase 2 Transition & Enrage (Phase 2)
+    // 4. Boss Phase 2 Transition & Enrage
     enemies.forEach(e => {
       if (e.active && e.isBoss && !e.enraged && e.hp <= e.maxHp * 0.5) {
         e.enraged = true;
         e.bossPhase = 2;
         e.speed *= 1.45;
+        addTrauma(0.35);
         sfx.playBossEnrage();
         floatTexts.push({
           id: Math.random(),
@@ -600,77 +615,96 @@ export class CombatEngine {
           life: 1.4,
         });
 
-        // Spawn explosive mines that player can trigger against the boss
         if (!e.enrageDeployed) {
           e.enrageDeployed = true;
           enemies.push({
             id: Math.random(),
-            type: 'EXPLOSIVE_MINE',
+            type: 'MINE',
             x: e.x - 55,
-            y: e.y + 70,
-            width: 24,
-            height: 24,
-            hp: 30,
-            maxHp: 30,
-            speed: 30,
+            y: e.y + 60,
+            r: 16,
+            hp: Math.round(e.maxHp * 0.12),
+            maxHp: Math.round(e.maxHp * 0.12),
+            speed: 40,
             scoreVal: 15,
+            color: '#eab308',
+            armored: false,
             isBoss: false,
+            slowTimer: 0,
+            shootCooldown: 0,
+            hitFlash: 0,
+            bossPhase: 0,
             active: true,
           });
           enemies.push({
             id: Math.random(),
-            type: 'EXPLOSIVE_MINE',
+            type: 'MINE',
             x: e.x + 55,
-            y: e.y + 70,
-            width: 24,
-            height: 24,
-            hp: 30,
-            maxHp: 30,
-            speed: 30,
+            y: e.y + 60,
+            r: 16,
+            hp: Math.round(e.maxHp * 0.12),
+            maxHp: Math.round(e.maxHp * 0.12),
+            speed: 40,
             scoreVal: 15,
+            color: '#eab308',
+            armored: false,
             isBoss: false,
+            slowTimer: 0,
+            shootCooldown: 0,
+            hitFlash: 0,
+            bossPhase: 0,
             active: true,
           });
         }
       }
     });
-
-    // 5. Squad vs Enemy Defense Line Breaches
-    enemies.forEach(e => {
-      if (!e.active) return;
-      if (e.y >= player.y - 16) {
-        // Breached defense line: troop casualty
-        const troopsLost = Math.min(player.count, Math.max(1, Math.ceil(e.hp / 30)));
-        player.count -= troopsLost;
-        e.active = false;
-        this.createExplosionParticles(e.x, e.y, '#ef4444', particles, 14);
-        sfx.playLose();
-        this.updateSquadFormation(player);
-      }
-    });
   }
 
-  private static createExplosionParticles(
+  public static createExplosionParticles(
     x: number, 
     y: number, 
     color: string, 
     particles: Particle[], 
-    count: number = 8
+    count: number = 8,
+    isSpark: boolean = false
   ): void {
     for (let i = 0; i < count; i++) {
       const ang = Math.random() * Math.PI * 2;
-      const spd = 40 + Math.random() * 120;
+      const spd = isSpark ? (120 + Math.random() * 240) : (40 + Math.random() * 120);
+      const life = isSpark ? (0.2 + Math.random() * 0.25) : 0.6;
       particles.push({
         x,
         y,
         vx: Math.cos(ang) * spd,
         vy: Math.sin(ang) * spd,
-        radius: 2 + Math.random() * 2.5,
+        radius: isSpark ? 2.5 : (2 + Math.random() * 2.5),
         color,
         alpha: 1.0,
-        decay: 1.6 + Math.random() * 1.2,
-        life: 0.6,
+        decay: 1.0 / life,
+        life,
+        maxLife: life,
+        isSpark,
       });
     }
+  }
+
+  public static createShockwave(
+    x: number, 
+    y: number, 
+    color: string, 
+    shockwaves: Shockwave[], 
+    maxRadius: number = 48,
+    lineWidth: number = 3.5
+  ): void {
+    shockwaves.push({
+      x,
+      y,
+      radius: 6,
+      maxRadius,
+      color,
+      lineWidth,
+      alpha: 1.0,
+      decay: 2.2,
+    });
   }
 }

@@ -9,6 +9,7 @@ export const DEFAULT_SAVE: SaveData = {
   level: 1,
   maxLevel: 1,
   coins: 150,
+  selectedPerkIdx: 0,
   upgrades: {
     startSquad: 1,
     firepower: 1,

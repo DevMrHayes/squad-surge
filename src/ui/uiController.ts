@@ -159,8 +159,8 @@ export class UIController {
 
     // Sound toggle
     document.getElementById('btnToggleSound')?.addEventListener('click', (e) => {
-      sfx.enabled = !sfx.enabled;
-      (e.currentTarget as HTMLElement).textContent = sfx.enabled ? '🔊 Sound: ON' : '🔇 Sound: OFF';
+      const enabled = sfx.toggleMute();
+      (e.currentTarget as HTMLElement).textContent = enabled ? '🔊 Sound: ON' : '🔇 Sound: OFF';
     });
 
     // Result buttons

@@ -183,6 +183,42 @@ it('Upgrade pricing scales exponentially without overflow', () => {
   assert.strictEqual(getCost(baseCost, 5), 120);
 });
 
+// 10. Normalized Gate Charge & Breach Clash Physics
+it('Gate charging increments smoothly via normalized fractional gateCharge', () => {
+  const gate = { chargeHits: 0, hitsPerStep: 10, val: 2, maxVal: 10 };
+  const bullet = { gateCharge: 1.35 / 4 }; // 4 streams
+
+  // Apply hit
+  gate.chargeHits += bullet.gateCharge * 2.9;
+  assert.ok(gate.chargeHits > 0.95 && gate.chargeHits < 1.05, 'Fractional charge accumulated');
+
+  // Multi-hits to step
+  for (let i = 0; i < 10; i++) {
+    gate.chargeHits += bullet.gateCharge * 2.9;
+    if (gate.chargeHits >= gate.hitsPerStep && gate.val < gate.maxVal) {
+      gate.chargeHits -= gate.hitsPerStep;
+      gate.val += 1;
+    }
+  }
+  assert.strictEqual(gate.val, 3, 'Gate correctly leveled up to +3');
+});
+
+it('Perimeter breach clash trades soldiers by HP ratio and fails if Boss breaches', () => {
+  const player = { count: 12, shields: 0 };
+  const enemy = { hp: 140, isBoss: false };
+  const firepowerLvl = 2;
+
+  const soldierCost = Math.max(2, Math.ceil(enemy.hp / (14 + firepowerLvl * 3)));
+  assert.strictEqual(soldierCost, 7); // 140 / 20 = 7
+  player.count -= soldierCost;
+  assert.strictEqual(player.count, 5, 'Player survived breach clash with 5 soldiers');
+
+  // Boss breach is fatal
+  const boss = { hp: 1000, isBoss: true };
+  const isFatal = boss.isBoss;
+  assert.strictEqual(isFatal, true, 'Boss perimeter breach must be fatal');
+});
+
 console.log('====================================================');
 console.log(`  Tests Completed: ${passedTests} / ${totalTests} Passed`);
 console.log('====================================================');

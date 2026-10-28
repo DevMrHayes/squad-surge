@@ -1,4 +1,4 @@
-// Squad Surge: Core Game Types & Data Structures
+// Squad Surge: Core Game Types & Time-Scheduled Data Structures
 
 export type SectorId = 1 | 2 | 3 | 4 | 5;
 
@@ -25,10 +25,22 @@ export interface SquadMember {
   color: string;
 }
 
+export interface TailoredPerk {
+  id: string;
+  icon: string;
+  name: string;
+  desc: string;
+  bonusSquad: number;
+  gateChargeMult: number;
+  fireRateMult: number;
+  startShield: number;
+}
+
 export interface PlayerState {
   x: number;
   y: number;
   count: number;
+  shields: number;
   maxVisualBarrels: number;
   fireTimer: number;
   sniperTimer: number;
@@ -45,7 +57,6 @@ export interface PlayerState {
     cryoTimer: number;
     rapidTimer: number;
     blastTimer: number;
-    shieldHp: number;
     laserWeapon: boolean;
     homingMissiles: boolean;
   };
@@ -53,26 +64,27 @@ export interface PlayerState {
   fireRateMultiplier: number;
 }
 
-export type GateType = 'MATH' | 'CRATE' | 'ALTAR' | 'QUANTUM';
-export type MathOp = '+' | 'x';
+export type GateKind = 'CHARGE_ADD' | 'LOCKED_MULT' | 'BUFF_GATE' | 'HAZARD' | 'ALTAR' | 'QUANTUM';
 
 export interface Gate {
   id: number;
   x: number;
   y: number;
-  width: number;
-  height: number;
+  w: number;
+  h: number;
   lane: 'LEFT' | 'RIGHT' | 'CENTER';
-  type: GateType;
-  op: MathOp;
+  kind: GateKind;
   val: number;
+  maxVal: number;
   chargeHits: number;
   hitsPerStep: number;
-  maxVal: number;
-  lockHp: number;
-  maxLockHp: number;
-  isUnlocked: boolean;
-  boostKey?: 'ap' | 'cryo' | 'rapid' | 'blast' | 'shield' | 'sniper' | 'vanguard' | 'mortar';
+  lockHitsRemaining: number;
+  lockHitsMax: number;
+  unlocked: boolean;
+  boostType?: 'AP' | 'CRYO' | 'BLAST' | 'FIRERATE' | 'SHIELD' | 'SNIPER' | 'VANGUARD' | 'MORTAR';
+  label?: string;
+  color?: string;
+  hitScale: number;
   altarSacrificeCost?: number;
   altarWeaponReward?: 'laserWeapon' | 'homingMissiles';
   sliding?: boolean;
@@ -80,7 +92,20 @@ export interface Gate {
   slideDir?: number;
   flipPolarity?: boolean;
   polarityTimer?: number;
-  isConsumed?: boolean;
+}
+
+export interface Crate {
+  id: number;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  hp: number;
+  maxHp: number;
+  boostType: 'AP' | 'CRYO' | 'BLAST' | 'FIRERATE' | 'SHIELD' | 'SNIPER' | 'VANGUARD' | 'MORTAR';
+  label: string;
+  color: string;
+  hitScale: number;
 }
 
 export type ObstacleType = 'PRISM_MIRROR' | 'SPEED_STRIP' | 'HAZARD_STRIP';
@@ -100,15 +125,16 @@ export interface FieldObstacle {
 }
 
 export type EnemyType = 
-  | 'GRUNT' 
+  | 'RUNNER' 
   | 'SPRINTER' 
-  | 'ARMORED_BRUTE' 
-  | 'ARTILLERY' 
-  | 'EXPLOSIVE_MINE' 
+  | 'BRUTE' 
+  | 'SHOOTER' 
+  | 'MINE' 
   | 'SHIELD_BEARER' 
   | 'HEALER_DRONE' 
-  | 'WARDEN_BOSS' 
-  | 'TITAN_BOSS';
+  | 'CAPTAIN' 
+  | 'WARDEN' 
+  | 'TITAN';
 
 export interface BossArmorPlate {
   id: 'left' | 'right';
@@ -126,27 +152,35 @@ export interface Enemy {
   type: EnemyType;
   x: number;
   y: number;
-  width: number;
-  height: number;
+  r: number;
   hp: number;
   maxHp: number;
   speed: number;
   scoreVal: number;
+  color: string;
+  armored: boolean;
   isBoss: boolean;
-  isSprinter?: boolean;
-  isShooter?: boolean;
-  shootTimer?: number;
-  artilleryTargetX?: number;
+  name?: string;
+  slowTimer: number;
+  shootCooldown: number;
+  hitFlash: number;
   shielded?: boolean;
   shieldSourceId?: number;
   healTimer?: number;
-  bossPhase?: number;
+  bossPhase: number;
   armorPlates?: BossArmorPlate[];
   enraged?: boolean;
   enrageDeployed?: boolean;
-  isSlowed?: boolean;
-  slowTimer?: number;
   active: boolean;
+}
+
+export interface EnemyMortarShell {
+  x: number;
+  y: number;
+  targetX: number;
+  vx: number;
+  vy: number;
+  squadLoss: number;
 }
 
 export interface Bullet {
@@ -156,6 +190,7 @@ export interface Bullet {
   vx: number;
   vy: number;
   damage: number;
+  gateCharge: number;
   radius: number;
   color: string;
   isPierce?: boolean;
@@ -188,6 +223,19 @@ export interface Particle {
   alpha: number;
   decay: number;
   life: number;
+  maxLife: number;
+  isSpark?: boolean;
+}
+
+export interface Shockwave {
+  x: number;
+  y: number;
+  radius: number;
+  maxRadius: number;
+  color: string;
+  lineWidth: number;
+  alpha: number;
+  decay: number;
 }
 
 export interface FloatingText {
@@ -202,28 +250,68 @@ export interface FloatingText {
   life: number;
 }
 
+// Scheduled Items
+export interface GateQueueItem {
+  spawnTime: number;
+  lane: number; // 0 = Left, 1 = Right
+  kind: GateKind;
+  val?: number;
+  maxVal?: number;
+  hitsPerStep?: number;
+  lockHitsRemaining?: number;
+  lockHitsMax?: number;
+  boostType?: 'AP' | 'CRYO' | 'BLAST' | 'FIRERATE' | 'SHIELD' | 'SNIPER' | 'VANGUARD' | 'MORTAR';
+  label?: string;
+  color?: string;
+  altarSacrificeCost?: number;
+  altarWeaponReward?: 'laserWeapon' | 'homingMissiles';
+  sliding?: boolean;
+  flipPolarity?: boolean;
+}
+
+export interface CrateQueueItem {
+  spawnTime: number;
+  lane3: number; // 0, 1, 2
+  hp: number;
+  maxHp: number;
+  boostType: 'AP' | 'CRYO' | 'BLAST' | 'FIRERATE' | 'SHIELD' | 'SNIPER' | 'VANGUARD' | 'MORTAR';
+  label: string;
+  color: string;
+}
+
+export interface EnemyScheduleItem {
+  spawnTime: number;
+  xNorm: number;
+  kind: EnemyType;
+  hp: number;
+  maxHp: number;
+  speedMult: number;
+  name?: string;
+}
+
+export interface ObstacleQueueItem {
+  spawnTime: number;
+  type: ObstacleType;
+  lane: 'LEFT' | 'RIGHT' | 'CENTER';
+  angleDeg: number;
+  overclockRate?: number;
+  dragFactor?: number;
+}
+
 export interface LevelPlan {
   level: number;
   sector: SectorId;
   biome: BiomeConfig;
-  totalEnemies: number;
+  tier: number;
   isBossLevel: boolean;
   isTitanLevel: boolean;
+  scrollSpeed: number;
+  totalEnemies: number;
+  gateQueue: GateQueueItem[];
+  crateQueue: CrateQueueItem[];
+  enemySchedule: EnemyScheduleItem[];
+  obstacleQueue: ObstacleQueueItem[];
   coinReward: number;
-  waves: WaveStep[];
-  features: string[];
-}
-
-export interface WaveStep {
-  spawnYOffset: number;
-  gates?: Partial<Gate>[];
-  obstacles?: Partial<FieldObstacle>[];
-  enemies?: {
-    type: EnemyType;
-    lane: 'LEFT' | 'RIGHT' | 'CENTER';
-    count: number;
-    spacingY?: number;
-  }[];
 }
 
 export interface SaveData {
@@ -231,6 +319,7 @@ export interface SaveData {
   level: number;
   maxLevel: number;
   coins: number;
+  selectedPerkIdx: number;
   upgrades: {
     startSquad: number;
     firepower: number;
@@ -252,12 +341,4 @@ export interface SaveData {
   userId?: string;
   displayName?: string;
   lastSyncedAt?: number;
-}
-
-export interface AchievementDef {
-  id: string;
-  title: string;
-  desc: string;
-  icon: string;
-  rewardCoins: number;
 }
