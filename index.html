@@ -167,16 +167,29 @@
         </div>
 
         <div class="flex-1 overflow-y-auto py-3 space-y-3">
-          <!-- Cloud Login Prompt -->
-          <div class="p-3 rounded-2xl bg-slate-900 border border-slate-800 flex items-center justify-between">
-            <div>
-              <div class="text-xs font-bold text-white">Google Cloud Sync</div>
-              <div class="text-[10px] text-slate-400">Sync career stats across mobile & desktop</div>
+          <!-- Cloud Account Info & Login -->
+          <div id="accountCard" class="p-3.5 rounded-2xl bg-slate-900 border border-slate-800 space-y-2.5">
+            <div class="flex items-center justify-between">
+              <div>
+                <div class="text-xs font-bold text-white" id="userAccountLabel">Commander Account</div>
+                <div class="text-[10px] text-slate-400" id="userEmailLabel">Not signed in</div>
+              </div>
+              <span id="userStatusBadge" class="px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-slate-800 text-slate-400 border border-slate-700">Offline</span>
             </div>
-            <button id="btnGoogleLogin" class="btn-tap px-3 py-1.5 rounded-lg bg-sky-500 text-slate-950 font-bold text-xs">
-              Sign In
-            </button>
+            <div class="flex gap-2">
+              <button id="btnOpenAuth" class="btn-tap flex-1 py-2 rounded-xl bg-sky-500 text-slate-950 font-extrabold text-xs">
+                Account Sign In / Register
+              </button>
+              <button id="btnLogout" class="hidden btn-tap px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 text-slate-300 font-bold text-xs">
+                Log Out
+              </button>
+            </div>
           </div>
+
+          <!-- Admin Panel Button (Exclusive to hayesorhaze@gmail.com) -->
+          <button id="btnOpenAdmin" class="hidden btn-tap w-full py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 font-black text-xs uppercase flex items-center justify-center gap-1.5 shadow-lg shadow-amber-500/20">
+            <span>👑 Chief Admin Approval Control</span>
+          </button>
 
           <!-- Career Stats Grid -->
           <div class="grid grid-cols-2 gap-2">
@@ -203,6 +216,100 @@
             <div class="text-[11px] font-extrabold text-slate-400 uppercase tracking-wider mb-2">Campaign Achievements</div>
             <div id="achievementsList" class="space-y-2"></div>
           </div>
+        </div>
+      </div>
+
+      <!-- AUTHENTICATION MODAL -->
+      <div id="authModal" class="hidden absolute inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/90 backdrop-blur-md">
+        <div class="w-full max-w-[340px] bg-slate-900 border border-slate-800 rounded-3xl p-5 flex flex-col gap-3 shadow-2xl">
+          <div class="flex items-center justify-between pb-1 border-b border-slate-800">
+            <div>
+              <h3 class="text-sm font-black text-white" id="authTitle">COMMANDER SIGN IN</h3>
+              <div class="text-[10px] text-slate-400">Save campaign stats & progression</div>
+            </div>
+            <button id="btnCloseAuth" class="btn-tap w-7 h-7 rounded-full bg-slate-800 text-slate-300 text-xs">✕</button>
+          </div>
+
+          <!-- Google Auth Button -->
+          <button id="btnAuthGoogle" class="btn-tap w-full py-2.5 rounded-xl bg-white text-slate-900 font-extrabold text-xs flex items-center justify-center gap-2 shadow-sm hover:bg-slate-100">
+            <span>🌐 Continue with Google</span>
+          </button>
+
+          <div class="flex items-center gap-2 my-0.5">
+            <div class="flex-1 h-[1px] bg-slate-800"></div>
+            <span class="text-[10px] font-bold text-slate-500 uppercase">Or Email</span>
+            <div class="flex-1 h-[1px] bg-slate-800"></div>
+          </div>
+
+          <!-- Email / Password Form -->
+          <form id="authForm" class="flex flex-col gap-2">
+            <input id="authEmail" type="email" placeholder="Commander Email" required class="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-sky-500" />
+            <input id="authPassword" type="password" placeholder="Password (min 6 chars)" required minlength="6" class="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-sky-500" />
+            <button id="btnAuthSubmit" type="submit" class="btn-tap w-full py-2.5 rounded-xl bg-sky-500 text-slate-950 font-black text-xs uppercase shadow-md shadow-sky-500/20 mt-1">
+              Sign In
+            </button>
+          </form>
+
+          <div class="text-center">
+            <button id="btnToggleAuthMode" type="button" class="text-[11px] font-bold text-sky-400 hover:underline">
+              Need an account? Register new commander
+            </button>
+          </div>
+
+          <div id="authError" class="hidden p-2 rounded-lg bg-rose-500/20 border border-rose-500/40 text-[10px] text-rose-300 text-center font-bold"></div>
+
+          <div class="p-2 rounded-xl bg-slate-950 border border-slate-800 text-[10px] text-slate-400 leading-tight">
+            🛡️ <span class="text-slate-300 font-bold">Admin Whitelist Notice:</span> All new accounts require approval by administrator (<span class="text-sky-300">hayesorhaze@gmail.com</span>) before combat access is granted.
+          </div>
+        </div>
+      </div>
+
+      <!-- PENDING APPROVAL MODAL -->
+      <div id="pendingModal" class="hidden absolute inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/95 backdrop-blur-md">
+        <div class="w-full max-w-[340px] bg-slate-900 border border-amber-500/40 rounded-3xl p-6 flex flex-col items-center text-center shadow-2xl">
+          <div class="w-14 h-14 rounded-full bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-2xl mb-3">
+            ⏳
+          </div>
+          <h3 class="text-base font-black text-white tracking-tight mb-1">ACCOUNT PENDING APPROVAL</h3>
+          <p class="text-xs text-slate-300 mb-2">
+            Your commander account (<span id="pendingUserEmail" class="text-amber-300 font-bold"></span>) has been registered.
+          </p>
+          <div class="p-3 rounded-xl bg-slate-950 border border-slate-800 text-[11px] text-slate-400 leading-relaxed mb-4 text-left">
+            Administrator (<span class="text-sky-400 font-bold">hayesorhaze@gmail.com</span>) must approve your account before you can deploy squads onto the highway.
+          </div>
+          <div class="w-full flex flex-col gap-2">
+            <button id="btnCheckApproval" class="btn-tap w-full py-3 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 font-extrabold text-xs uppercase shadow-md shadow-amber-500/20">
+              🔄 Check Approval Status
+            </button>
+            <button id="btnPendingLogout" class="btn-tap w-full py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-slate-300 font-bold text-xs">
+              Log Out / Switch Account
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ADMIN APPROVAL PANEL MODAL (Exclusive for hayesorhaze@gmail.com) -->
+      <div id="adminModal" class="hidden absolute inset-0 z-50 flex flex-col p-4 bg-slate-950/95 backdrop-blur-md">
+        <div class="flex items-center justify-between pb-3 border-b border-slate-800 shrink-0">
+          <div>
+            <div class="flex items-center gap-1.5">
+              <span class="text-amber-400 text-xs">👑</span>
+              <h3 class="text-sm font-black text-white">CHIEF ADMIN APPROVAL CONTROL</h3>
+            </div>
+            <div class="text-[10px] text-slate-400">hayesorhaze@gmail.com</div>
+          </div>
+          <button id="btnCloseAdmin" class="btn-tap w-8 h-8 rounded-full bg-slate-900 border border-slate-800 text-slate-300 text-xs">✕</button>
+        </div>
+
+        <div class="flex items-center justify-between py-2 border-b border-slate-800 text-[11px] font-bold">
+          <span class="text-slate-400" id="adminQueueCount">Loading player queue...</span>
+          <button id="btnRefreshAdmin" class="btn-tap px-2.5 py-1 rounded-lg bg-slate-800 border border-slate-700 text-sky-400 text-[10px]">
+            🔄 Refresh
+          </button>
+        </div>
+
+        <div id="adminUserList" class="flex-1 overflow-y-auto py-3 space-y-2.5">
+          <!-- Populated by UIController -->
         </div>
       </div>
 

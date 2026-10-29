@@ -199,9 +199,14 @@ export class GameRenderer {
       } else {
         // Standard Charge Add / Hazard / Quantum Gate
         const isPositive = g.val >= 0;
-        ctx.fillStyle = isPositive ? 'rgba(14, 165, 233, 0.22)' : 'rgba(244, 63, 94, 0.22)';
-        ctx.strokeStyle = isPositive ? '#38bdf8' : '#f43f5e';
-        ctx.lineWidth = 2;
+        const isMaxed = g.maxVal > 0 && g.val >= g.maxVal;
+        ctx.fillStyle = isMaxed 
+          ? 'rgba(16, 185, 129, 0.28)' 
+          : (isPositive ? 'rgba(14, 165, 233, 0.22)' : 'rgba(244, 63, 94, 0.22)');
+        ctx.strokeStyle = isMaxed 
+          ? '#10b981' 
+          : (isPositive ? '#38bdf8' : '#f43f5e');
+        ctx.lineWidth = isMaxed ? 2.5 : 2;
         ctx.beginPath();
         ctx.roundRect(rx, ry, w, h, 10);
         ctx.fill();
@@ -213,7 +218,7 @@ export class GameRenderer {
         ctx.roundRect(rx, ry, w, h, 10);
         ctx.clip();
         const scanY = ry + ((elapsed * 45) % h);
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.20)';
+        ctx.strokeStyle = isMaxed ? 'rgba(16, 185, 129, 0.40)' : 'rgba(255, 255, 255, 0.20)';
         ctx.lineWidth = 1.5;
         ctx.beginPath();
         ctx.moveTo(rx, scanY);
@@ -224,21 +229,36 @@ export class GameRenderer {
         ctx.fillStyle = '#ffffff';
         ctx.font = '900 20px "JetBrains Mono", monospace';
         ctx.textAlign = 'center';
-        ctx.fillText(`${g.val > 0 ? '+' : ''}${g.val}`, g.x, ry + 26);
+        ctx.fillText(`${g.val > 0 ? '+' : ''}${Math.round(g.val)}`, g.x, ry + 26);
 
-        // Charge Bar
+        // Charge Progress Bar
         if (g.maxVal > 0) {
           const barW = w - 24;
           const barH = 5;
-          const fillW = Math.max(0, Math.min(barW, (g.chargeHits / g.hitsPerStep) * barW));
+          // Calculate true continuous progress towards maxVal
+          const chargeRatio = isMaxed 
+            ? 1.0 
+            : Math.max(0, Math.min(1.0, (Math.max(0, g.val) + (g.chargeHits / g.hitsPerStep)) / g.maxVal));
+          const fillW = Math.max(0, Math.min(barW, barW * chargeRatio));
+
           ctx.fillStyle = '#0f172a';
           ctx.fillRect(g.x - barW / 2, ry + 34, barW, barH);
-          ctx.fillStyle = isPositive ? '#38bdf8' : '#f43f5e';
-          ctx.fillRect(g.x - barW / 2, ry + 34, fillW, barH);
 
-          ctx.fillStyle = '#94a3b8';
-          ctx.font = '700 8px Inter, sans-serif';
-          ctx.fillText(`MAX +${g.maxVal}`, g.x, ry + 46);
+          if (isMaxed) {
+            ctx.fillStyle = '#10b981';
+            ctx.fillRect(g.x - barW / 2, ry + 34, barW, barH);
+
+            ctx.fillStyle = '#34d399';
+            ctx.font = '800 8.5px Inter, sans-serif';
+            ctx.fillText(`⚡ MAX REACHED (+${g.maxVal})`, g.x, ry + 46);
+          } else {
+            ctx.fillStyle = isPositive ? '#38bdf8' : '#f43f5e';
+            ctx.fillRect(g.x - barW / 2, ry + 34, fillW, barH);
+
+            ctx.fillStyle = '#94a3b8';
+            ctx.font = '700 8px Inter, sans-serif';
+            ctx.fillText(`MAX +${g.maxVal}`, g.x, ry + 46);
+          }
         }
       }
 
@@ -433,7 +453,7 @@ export class GameRenderer {
         ctx.fillStyle = '#ffffff';
         ctx.font = '800 10px "JetBrains Mono", monospace';
         ctx.textAlign = 'center';
-        ctx.fillText(`${e.hp}`, e.x, e.y + 4);
+        ctx.fillText(`${Math.ceil(Math.max(0, e.hp))}`, e.x, e.y + 4);
       }
 
       // Ballistic Hit Flash Overlay

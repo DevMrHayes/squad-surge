@@ -1,12 +1,24 @@
-// Squad Surge: Zero-Clutter UI Controller & Modal Management
+// Squad Surge: Zero-Clutter UI Controller & Player Account Whitelist Management
 import { GameLoop } from '../engine/gameLoop';
 import { storage } from '../services/storage';
 import { ACHIEVEMENTS_CATALOG } from '../constants/biomes';
-import { loginWithGoogle, getCurrentUser } from '../config/firebase';
+import { 
+  loginWithGoogle, 
+  loginWithEmail, 
+  logoutUser, 
+  getCurrentUser, 
+  getCurrentProfile, 
+  isCurrentAdmin, 
+  getAllUsers, 
+  updateUserApproval,
+  PRIMARY_ADMIN_EMAIL
+} from '../config/firebase';
+import { UserAccountProfile } from '../types/game';
 import { sfx } from '../services/audio';
 
 export class UIController {
   private game: GameLoop;
+  private isSignUpMode: boolean = false;
 
   // HUD Elements
   private uiLevelNum = document.getElementById('uiLevelNum')!;
@@ -22,6 +34,9 @@ export class UIController {
   private pauseModal = document.getElementById('pauseModal')!;
   private resultModal = document.getElementById('resultModal')!;
   private profileModal = document.getElementById('profileModal')!;
+  private authModal = document.getElementById('authModal')!;
+  private pendingModal = document.getElementById('pendingModal')!;
+  private adminModal = document.getElementById('adminModal')!;
 
   constructor(game: GameLoop) {
     this.game = game;
@@ -41,7 +56,13 @@ export class UIController {
   }
 
   public showStartBriefing(): void {
-    const save = storage.getSave();
+    const profile = getCurrentProfile();
+    // If user account is pending approval, do not show deployment overlay; show pending modal instead
+    if (profile && profile.status === 'PENDING') {
+      this.showPendingModal(profile);
+      return;
+    }
+
     const plan = this.game.plan;
 
     document.getElementById('startBadge')!.textContent = plan.biome.name;
@@ -131,9 +152,77 @@ export class UIController {
     this.resultModal.classList.remove('hidden');
   }
 
+  public handleAuthStateChange(profile: UserAccountProfile | null): void {
+    const accountLabel = document.getElementById('userAccountLabel');
+    const emailLabel = document.getElementById('userEmailLabel');
+    const statusBadge = document.getElementById('userStatusBadge');
+    const btnOpenAuth = document.getElementById('btnOpenAuth');
+    const btnLogout = document.getElementById('btnLogout');
+    const btnOpenAdmin = document.getElementById('btnOpenAdmin');
+
+    if (!profile) {
+      if (accountLabel) accountLabel.textContent = 'Commander (Guest)';
+      if (emailLabel) emailLabel.textContent = 'Offline Local Mode';
+      if (statusBadge) {
+        statusBadge.textContent = 'Guest';
+        statusBadge.className = 'px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-slate-800 text-slate-400 border border-slate-700';
+      }
+      btnOpenAuth?.classList.remove('hidden');
+      btnLogout?.classList.add('hidden');
+      btnOpenAdmin?.classList.add('hidden');
+      this.pendingModal.classList.add('hidden');
+      return;
+    }
+
+    if (accountLabel) accountLabel.textContent = profile.displayName || 'Commander';
+    if (emailLabel) emailLabel.textContent = profile.email;
+    btnOpenAuth?.classList.add('hidden');
+    btnLogout?.classList.remove('hidden');
+
+    const isAdmin = isCurrentAdmin();
+    if (btnOpenAdmin) {
+      if (isAdmin) btnOpenAdmin.classList.remove('hidden');
+      else btnOpenAdmin.classList.add('hidden');
+    }
+
+    if (statusBadge) {
+      if (profile.status === 'APPROVED') {
+        statusBadge.textContent = isAdmin ? '👑 Chief Admin' : '✓ Active Commander';
+        statusBadge.className = 'px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-emerald-500/20 text-emerald-300 border border-emerald-400/30';
+      } else if (profile.status === 'PENDING') {
+        statusBadge.textContent = '⏳ Pending Approval';
+        statusBadge.className = 'px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-amber-500/20 text-amber-300 border border-amber-400/30';
+      } else {
+        statusBadge.textContent = '🚫 Access Denied';
+        statusBadge.className = 'px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-rose-500/20 text-rose-300 border border-rose-400/30';
+      }
+    }
+
+    if (profile.status === 'PENDING') {
+      this.showPendingModal(profile);
+    } else {
+      this.pendingModal.classList.add('hidden');
+      this.authModal.classList.add('hidden');
+      this.updateHUD(this.game.currentLevel, this.game.enemiesLeft, this.game.totalEnemiesInLevel, storage.getSave().coins);
+      this.showStartBriefing();
+    }
+  }
+
+  private showPendingModal(profile: UserAccountProfile): void {
+    const emailEl = document.getElementById('pendingUserEmail');
+    if (emailEl) emailEl.textContent = profile.email;
+    this.startOverlay.classList.add('hidden');
+    this.pendingModal.classList.remove('hidden');
+  }
+
   private setupListeners(): void {
     // Tap to start combat
     document.getElementById('btnTapToStart')?.addEventListener('click', () => {
+      const profile = getCurrentProfile();
+      if (profile && profile.status === 'PENDING') {
+        this.showPendingModal(profile);
+        return;
+      }
       this.startOverlay.classList.add('hidden');
       this.game.startCombat();
     });
@@ -185,7 +274,7 @@ export class UIController {
 
     document.getElementById('btnCloseMap')?.addEventListener('click', () => {
       this.mapModal.classList.add('hidden');
-      if (this.startOverlay.classList.contains('hidden')) {
+      if (this.startOverlay.classList.contains('hidden') && this.game.mode === 'PAUSED') {
         this.game.resume();
       }
     });
@@ -200,17 +289,192 @@ export class UIController {
       this.profileModal.classList.add('hidden');
     });
 
-    document.getElementById('btnGoogleLogin')?.addEventListener('click', async () => {
-      try {
-        const user = await loginWithGoogle();
-        if (user) {
-          await storage.syncWithCloud();
-          this.renderProfile();
-          this.updateHUD(this.game.currentLevel, this.game.enemiesLeft, this.game.totalEnemiesInLevel, storage.getSave().coins);
-        }
-      } catch (e) {
-        console.error(e);
+    // Auth Modal Triggers
+    document.getElementById('btnOpenAuth')?.addEventListener('click', () => {
+      this.authModal.classList.remove('hidden');
+    });
+
+    document.getElementById('btnCloseAuth')?.addEventListener('click', () => {
+      this.authModal.classList.add('hidden');
+    });
+
+    // Toggle Sign In vs Register
+    document.getElementById('btnToggleAuthMode')?.addEventListener('click', (e) => {
+      this.isSignUpMode = !this.isSignUpMode;
+      const title = document.getElementById('authTitle')!;
+      const submit = document.getElementById('btnAuthSubmit')!;
+      const toggle = e.currentTarget as HTMLElement;
+
+      if (this.isSignUpMode) {
+        title.textContent = 'REGISTER NEW COMMANDER';
+        submit.textContent = 'Create Account (Pending Approval)';
+        toggle.textContent = 'Already have an account? Sign In';
+      } else {
+        title.textContent = 'COMMANDER SIGN IN';
+        submit.textContent = 'Sign In';
+        toggle.textContent = 'Need an account? Register new commander';
       }
+    });
+
+    // Google Sign-In
+    document.getElementById('btnAuthGoogle')?.addEventListener('click', async () => {
+      const errBox = document.getElementById('authError')!;
+      errBox.classList.add('hidden');
+      try {
+        const profile = await loginWithGoogle();
+        if (profile) {
+          await storage.syncWithCloud();
+          this.handleAuthStateChange(profile);
+        }
+      } catch (err: any) {
+        errBox.textContent = err?.message || 'Google sign-in was cancelled or failed.';
+        errBox.classList.remove('hidden');
+      }
+    });
+
+    // Email Form Submit
+    document.getElementById('authForm')?.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const errBox = document.getElementById('authError')!;
+      errBox.classList.add('hidden');
+
+      const emailInput = document.getElementById('authEmail') as HTMLInputElement;
+      const passInput = document.getElementById('authPassword') as HTMLInputElement;
+
+      try {
+        const profile = await loginWithEmail(emailInput.value.trim(), passInput.value, this.isSignUpMode);
+        if (profile) {
+          await storage.syncWithCloud();
+          this.handleAuthStateChange(profile);
+        }
+      } catch (err: any) {
+        errBox.textContent = err?.message || 'Authentication failed. Please verify credentials.';
+        errBox.classList.remove('hidden');
+      }
+    });
+
+    // Logout Buttons
+    const handleLogout = async () => {
+      await logoutUser();
+      this.handleAuthStateChange(null);
+    };
+    document.getElementById('btnLogout')?.addEventListener('click', handleLogout);
+    document.getElementById('btnPendingLogout')?.addEventListener('click', handleLogout);
+
+    // Check Approval Status
+    document.getElementById('btnCheckApproval')?.addEventListener('click', async () => {
+      await storage.syncWithCloud();
+      const profile = getCurrentProfile();
+      this.handleAuthStateChange(profile);
+    });
+
+    // Admin Modal Controls
+    document.getElementById('btnOpenAdmin')?.addEventListener('click', async () => {
+      this.profileModal.classList.add('hidden');
+      this.adminModal.classList.remove('hidden');
+      await this.loadAdminApprovalQueue();
+    });
+
+    document.getElementById('btnCloseAdmin')?.addEventListener('click', () => {
+      this.adminModal.classList.add('hidden');
+    });
+
+    document.getElementById('btnRefreshAdmin')?.addEventListener('click', async () => {
+      await this.loadAdminApprovalQueue();
+    });
+  }
+
+  public async loadAdminApprovalQueue(): Promise<void> {
+    const listContainer = document.getElementById('adminUserList')!;
+    const countEl = document.getElementById('adminQueueCount')!;
+    listContainer.innerHTML = '<div class="text-xs text-slate-400 py-4 text-center">Loading commander list...</div>';
+
+    const users = await getAllUsers();
+    const pendingCount = users.filter(u => u.status === 'PENDING').length;
+    countEl.textContent = `Pending Approvals: ${pendingCount} | Total Commanders: ${users.length}`;
+
+    if (users.length === 0) {
+      listContainer.innerHTML = '<div class="text-xs text-slate-500 py-8 text-center">No registered commanders found.</div>';
+      return;
+    }
+
+    // Sort: Pending first, then by createdAt descending
+    users.sort((a, b) => {
+      if (a.status === 'PENDING' && b.status !== 'PENDING') return -1;
+      if (b.status === 'PENDING' && a.status !== 'PENDING') return 1;
+      return (b.createdAt || 0) - (a.createdAt || 0);
+    });
+
+    listContainer.innerHTML = '';
+    users.forEach(u => {
+      const isPrimaryAdmin = u.email.toLowerCase() === PRIMARY_ADMIN_EMAIL;
+      const isPending = u.status === 'PENDING';
+      const isApproved = u.status === 'APPROVED';
+
+      const card = document.createElement('div');
+      card.className = `p-3 rounded-2xl border flex flex-col gap-2 ${
+        isPending 
+          ? 'bg-amber-950/30 border-amber-500/50' 
+          : isApproved 
+          ? 'bg-slate-900 border-slate-800' 
+          : 'bg-rose-950/20 border-rose-900/40 opacity-70'
+      }`;
+
+      card.innerHTML = `
+        <div class="flex items-start justify-between">
+          <div>
+            <div class="flex items-center gap-1.5">
+              <span class="text-xs font-bold text-white">${u.displayName || 'Commander'}</span>
+              ${isPrimaryAdmin ? '<span class="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 font-extrabold border border-amber-500/30">PRIMARY ADMIN</span>' : ''}
+            </div>
+            <div class="text-[11px] font-mono text-slate-400">${u.email}</div>
+          </div>
+          <span class="px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase tracking-wider ${
+            isApproved 
+              ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-400/30' 
+              : isPending 
+              ? 'bg-amber-500/20 text-amber-300 border border-amber-400/30' 
+              : 'bg-rose-500/20 text-rose-300 border border-rose-400/30'
+          }">
+            ${u.status}
+          </span>
+        </div>
+
+        <div class="flex items-center justify-between text-[10px] text-slate-400 border-t border-slate-800/80 pt-2">
+          <div>Level: <span class="font-bold text-sky-400">${u.saveData?.level || 1}</span> (Max: ${u.saveData?.maxLevel || 1})</div>
+          <div>Coins: <span class="font-bold text-amber-300">${u.saveData?.coins || 0} 🪙</span></div>
+          <div>Joined: ${new Date(u.createdAt || Date.now()).toLocaleDateString()}</div>
+        </div>
+
+        ${!isPrimaryAdmin ? `
+          <div class="flex gap-2 pt-1">
+            ${isPending || !isApproved ? `
+              <button class="btn-approve btn-tap flex-1 py-1.5 rounded-lg bg-emerald-500 text-slate-950 font-black text-xs uppercase" data-uid="${u.uid}">
+                ✓ Approve Access
+              </button>
+            ` : ''}
+            ${isPending || isApproved ? `
+              <button class="btn-reject btn-tap flex-1 py-1.5 rounded-lg bg-rose-500/20 text-rose-300 border border-rose-500/40 font-bold text-xs uppercase" data-uid="${u.uid}">
+                ✕ Decline / Revoke
+              </button>
+            ` : ''}
+          </div>
+        ` : ''}
+      `;
+
+      card.querySelector('.btn-approve')?.addEventListener('click', async () => {
+        await updateUserApproval(u.uid, 'APPROVED');
+        sfx.playGateCharge();
+        await this.loadAdminApprovalQueue();
+      });
+
+      card.querySelector('.btn-reject')?.addEventListener('click', async () => {
+        await updateUserApproval(u.uid, 'REJECTED');
+        sfx.playLose();
+        await this.loadAdminApprovalQueue();
+      });
+
+      listContainer.appendChild(card);
     });
   }
 
@@ -252,9 +516,15 @@ export class UIController {
   private renderProfile(): void {
     const save = storage.getSave();
     const user = getCurrentUser();
+    const profile = getCurrentProfile();
 
-    document.getElementById('profileName')!.textContent = user?.displayName || 'Commander (Guest)';
-    document.getElementById('cloudStatus')!.textContent = user ? '🟢 Synced with Google Cloud Firestore' : '🟡 Offline Guest Mode';
+    document.getElementById('profileName')!.textContent = profile?.displayName || user?.displayName || 'Commander';
+    document.getElementById('cloudStatus')!.textContent = profile?.status === 'APPROVED' 
+      ? '🟢 Cloud Sync Active' 
+      : profile?.status === 'PENDING'
+      ? '🟡 Pending Admin Whitelist'
+      : '⚪ Offline Local Mode';
+
     document.getElementById('statKills')!.textContent = `${save.stats.totalKills}`;
     document.getElementById('statBosses')!.textContent = `${save.stats.bossesDefeated}`;
     document.getElementById('statAltars')!.textContent = `${save.stats.altarsUsed}`;

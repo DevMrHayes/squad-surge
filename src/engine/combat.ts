@@ -411,10 +411,26 @@ export class CombatEngine {
                 g.chargeHits -= g.hitsPerStep;
                 g.val += 1;
                 sfx.playGateCharge();
-                if (shockwaves && g.val === g.maxVal) {
-                  this.createShockwave(g.x, g.y, g.val > 0 ? '#38bdf8' : '#f43f5e', shockwaves, 48);
+                if (g.val >= g.maxVal) {
+                  g.chargeHits = g.hitsPerStep;
+                  if (shockwaves) {
+                    this.createShockwave(g.x, g.y, '#10b981', shockwaves, 52);
+                  }
+                  floatTexts.push({
+                    id: Math.random(),
+                    text: '⚡ MAXED (+${g.maxVal})!',
+                    x: g.x,
+                    y: g.y - 18,
+                    vy: -35,
+                    color: '#34d399',
+                    fontSize: 14,
+                    alpha: 1.0,
+                    life: 0.8,
+                  });
                 }
               }
+            } else {
+              g.chargeHits = g.hitsPerStep;
             }
           }
           return;

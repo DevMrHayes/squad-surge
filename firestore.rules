@@ -1,0 +1,252 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: squad_surge_users
+    // Document ID: {userId} (Firebase Auth UID)
+    // Fields:
+    //   - uid: string (required, length 1..128, immutable, matches document ID and auth UID)
+    //   - email: string (required, max 256 chars, valid email format or empty string)
+    //   - displayName: string (required, 1..100 chars)
+    //   - photoURL: string (optional, URL max 2048 chars)
+    //   - role: string (required, enum: 'ADMIN' | 'PLAYER')
+    //   - status: string (required, enum: 'APPROVED' | 'PENDING' | 'REJECTED')
+    //   - saveData: map (required, player game progress and stats)
+    //       - version: number (required, 1..100)
+    //       - level: number (required, 1..1000)
+    //       - maxLevel: number (required, 1..1000)
+    //       - coins: number (required, 0..1000000000)
+    //       - selectedPerkIdx: number (required, 0..50)
+    //       - upgrades: map (required, startSquad, firepower, fireRate, armorPierce, specialistChance)
+    //       - stats: map (required, totalKills, bossesDefeated, gatesCharged, altarsUsed, ricochetKills, highestSquad, gamesPlayed, victories)
+    //       - achievements: map (required, string -> bool, max 100 entries)
+    //       - userId: string (optional, max 128 chars)
+    //       - displayName: string (optional, max 100 chars)
+    //       - lastSyncedAt: number | timestamp (optional)
+    //   - createdAt: number | timestamp (required, immutable)
+    //   - lastLoginAt: number | timestamp (required)
+    //   - approvedBy: string (optional, admin identifier, max 128 chars)
+    //   - approvedAt: number | timestamp (optional, approval timestamp)
+    //
+    // Collection: squad_surge_players (Legacy Collection)
+    // Document ID: {userId} (Firebase Auth UID)
+    // Fields:
+    //   - Backwards-compatible player progress documents synced by legacy client SDKs
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+
+    // Verify if the caller is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Verify if caller is the designated Primary Admin
+    function isAdmin() {
+      return isAuthenticated() &&
+             request.auth.token.email != null &&
+             request.auth.token.email.lower() == 'hayesorhaze@gmail.com';
+    }
+
+    // Verify if caller owns this document by UID match
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // Email format validation (standard RFC-5322 compatible regex)
+    function isValidEmail(email) {
+      return email is string &&
+             email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    }
+
+    // Optional URL validation (allows null or string <= 2048 chars starting with http:// or https://)
+    function isValidOptionalUrl(data, field) {
+      return !(field in data) || 
+             data[field] == null || 
+             (data[field] is string && 
+              data[field].size() <= 2048 && 
+              (data[field].size() == 0 || data[field].matches("^https?://.*")));
+    }
+
+    // Optional string validation with min and max length bounds
+    function isValidOptionalString(data, field, minLen, maxLen) {
+      return !(field in data) ||
+             data[field] == null ||
+             (data[field] is string &&
+              data[field].size() >= minLen &&
+              data[field].size() <= maxLen);
+    }
+
+    // Optional timestamp or epoch millisecond number validation
+    function isValidOptionalTimestamp(data, field) {
+      return !(field in data) ||
+             data[field] == null ||
+             (data[field] is number || data[field] is timestamp);
+    }
+
+    // Upgrade levels validation (strictly bounded between 1 and 100)
+    function isValidUpgrades(upgrades) {
+      return upgrades is map &&
+             upgrades.keys().hasAll([
+               'startSquad', 'firepower', 'fireRate', 'armorPierce', 'specialistChance'
+             ]) &&
+             upgrades.keys().hasOnly([
+               'startSquad', 'firepower', 'fireRate', 'armorPierce', 'specialistChance'
+             ]) &&
+             upgrades.startSquad is number && upgrades.startSquad >= 1 && upgrades.startSquad <= 100 &&
+             upgrades.firepower is number && upgrades.firepower >= 1 && upgrades.firepower <= 100 &&
+             upgrades.fireRate is number && upgrades.fireRate >= 1 && upgrades.fireRate <= 100 &&
+             upgrades.armorPierce is number && upgrades.armorPierce >= 1 && upgrades.armorPierce <= 100 &&
+             upgrades.specialistChance is number && upgrades.specialistChance >= 1 && upgrades.specialistChance <= 100;
+    }
+
+    // Lifetime game statistics validation (strictly non-negative)
+    function isValidStats(stats) {
+      return stats is map &&
+             stats.keys().hasAll([
+               'totalKills', 'bossesDefeated', 'gatesCharged', 
+               'altarsUsed', 'ricochetKills', 'highestSquad', 
+               'gamesPlayed', 'victories'
+             ]) &&
+             stats.keys().hasOnly([
+               'totalKills', 'bossesDefeated', 'gatesCharged', 
+               'altarsUsed', 'ricochetKills', 'highestSquad', 
+               'gamesPlayed', 'victories'
+             ]) &&
+             stats.totalKills is number && stats.totalKills >= 0 &&
+             stats.bossesDefeated is number && stats.bossesDefeated >= 0 &&
+             stats.gatesCharged is number && stats.gatesCharged >= 0 &&
+             stats.altarsUsed is number && stats.altarsUsed >= 0 &&
+             stats.ricochetKills is number && stats.ricochetKills >= 0 &&
+             stats.highestSquad is number && stats.highestSquad >= 0 &&
+             stats.gamesPlayed is number && stats.gamesPlayed >= 0 &&
+             stats.victories is number && stats.victories >= 0;
+    }
+
+    // Game progress SaveData validation (strict type safety & DoS bounds)
+    function isValidSaveData(save) {
+      return save is map &&
+             save.keys().hasAll([
+               'version', 'level', 'maxLevel', 'coins', 
+               'selectedPerkIdx', 'upgrades', 'stats', 'achievements'
+             ]) &&
+             save.keys().hasOnly([
+               'version', 'level', 'maxLevel', 'coins', 
+               'selectedPerkIdx', 'upgrades', 'stats', 'achievements',
+               'userId', 'displayName', 'lastSyncedAt'
+             ]) &&
+             save.version is number && save.version >= 1 && save.version <= 100 &&
+             save.level is number && save.level >= 1 && save.level <= 1000 &&
+             save.maxLevel is number && save.maxLevel >= 1 && save.maxLevel <= 1000 &&
+             save.coins is number && save.coins >= 0 && save.coins <= 1000000000 &&
+             save.selectedPerkIdx is number && save.selectedPerkIdx >= 0 && save.selectedPerkIdx <= 50 &&
+             isValidUpgrades(save.upgrades) &&
+             isValidStats(save.stats) &&
+             save.achievements is map && save.achievements.size() <= 100 &&
+             (!('userId' in save) || (save.userId is string && save.userId.size() <= 128)) &&
+             (!('displayName' in save) || (save.displayName is string && save.displayName.size() <= 100)) &&
+             (!('lastSyncedAt' in save) || (save.lastSyncedAt is number || save.lastSyncedAt is timestamp));
+    }
+
+    // Complete User Account Profile domain validator
+    function isValidUserAccount(data, userId) {
+      return data is map &&
+             data.keys().hasAll([
+               'uid', 'email', 'displayName', 'role', 
+               'status', 'saveData', 'createdAt', 'lastLoginAt'
+             ]) &&
+             data.keys().hasOnly([
+               'uid', 'email', 'displayName', 'photoURL', 
+               'role', 'status', 'saveData', 'createdAt', 
+               'lastLoginAt', 'approvedBy', 'approvedAt'
+             ]) &&
+             data.uid is string && data.uid == userId && data.uid.size() > 0 && data.uid.size() <= 128 &&
+             data.email is string && data.email.size() <= 256 &&
+             (data.email.size() == 0 || isValidEmail(data.email)) &&
+             data.displayName is string && data.displayName.size() > 0 && data.displayName.size() <= 100 &&
+             isValidOptionalUrl(data, 'photoURL') &&
+             data.role is string && (data.role == 'ADMIN' || data.role == 'PLAYER') &&
+             data.status is string && (data.status == 'APPROVED' || data.status == 'PENDING' || data.status == 'REJECTED') &&
+             (data.createdAt is number || data.createdAt is timestamp) &&
+             (data.lastLoginAt is number || data.lastLoginAt is timestamp) &&
+             isValidOptionalString(data, 'approvedBy', 1, 128) &&
+             isValidOptionalTimestamp(data, 'approvedAt') &&
+             isValidSaveData(data.saveData);
+    }
+
+    // Legacy player document validator (protects against DoS and ensures UID alignment)
+    function isValidLegacyPlayer(data, userId) {
+      return data is map &&
+             data.size() <= 30 &&
+             (!('userId' in data) || (data.userId is string && data.userId == userId && data.userId.size() <= 128)) &&
+             (!('displayName' in data) || (data.displayName is string && data.displayName.size() <= 100));
+    }
+
+    // ===============================================================
+    // Collection Rules
+    // ===============================================================
+
+    // Primary User Profiles Collection
+    match /squad_surge_users/{userId} {
+      // Read: Allowed for document owner or primary admin
+      allow read: if isOwner(userId) || isAdmin();
+
+      // Create: Allowed if caller is owner or admin, with strict role/status guardrails
+      allow create: if (isOwner(userId) || isAdmin()) &&
+                       isValidUserAccount(request.resource.data, userId) &&
+                       (
+                         // Primary Admin can bootstrap admin role and approved status
+                         isAdmin() ||
+                         // Non-admin players MUST start as PLAYER and PENDING with no approval metadata
+                         (
+                           request.resource.data.role == 'PLAYER' &&
+                           request.resource.data.status == 'PENDING' &&
+                           !('approvedBy' in request.resource.data) &&
+                           !('approvedAt' in request.resource.data)
+                         )
+                       );
+
+      // Update:
+      // - Admin can update any field (approvals, role change, status change)
+      // - Non-admin owners can only update if APPROVED, and only 'saveData' and 'lastLoginAt'
+      allow update: if isValidUserAccount(request.resource.data, userId) &&
+                       request.resource.data.uid == resource.data.uid &&
+                       (
+                         isAdmin() ||
+                         (
+                           isOwner(userId) &&
+                           resource.data.status == 'APPROVED' &&
+                           request.resource.data.diff(resource.data).affectedKeys().hasOnly(['saveData', 'lastLoginAt']) &&
+                           request.resource.data.createdAt == resource.data.createdAt
+                         )
+                       );
+
+      // Delete: Restricted strictly to Primary Admin
+      allow delete: if isAdmin();
+    }
+
+    // Legacy Players Collection (Backwards Compatibility)
+    match /squad_surge_players/{userId} {
+      // Read: Allowed for owner or admin
+      allow read: if isOwner(userId) || isAdmin();
+
+      // Write (create, update, delete): Allowed for owner or admin with basic bounds validation
+      allow create, update: if (isOwner(userId) || isAdmin()) &&
+                               isValidLegacyPlayer(request.resource.data, userId);
+
+      allow delete: if isOwner(userId) || isAdmin();
+    }
+
+    // Default Deny all other collections and documents
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

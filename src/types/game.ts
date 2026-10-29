@@ -342,3 +342,20 @@ export interface SaveData {
   displayName?: string;
   lastSyncedAt?: number;
 }
+
+export type UserRole = 'ADMIN' | 'PLAYER';
+export type UserApprovalStatus = 'APPROVED' | 'PENDING' | 'REJECTED';
+
+export interface UserAccountProfile {
+  uid: string;
+  email: string;
+  displayName: string;
+  photoURL?: string;
+  role: UserRole;
+  status: UserApprovalStatus;
+  saveData: SaveData;
+  createdAt: number;
+  lastLoginAt: number;
+  approvedBy?: string;
+  approvedAt?: number;
+}

@@ -3,3 +3,6 @@ dist
 .firebase
 .DS_Store
 *.local
+.env
+.env.local
+.env.*.local

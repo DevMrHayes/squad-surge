@@ -1,7 +1,7 @@
 // Squad Surge: Main Application Entry Point
 import { GameLoop } from './engine/gameLoop';
 import { UIController } from './ui/uiController';
-import { initAuthListener, loginAnonymously } from './config/firebase';
+import { initAuthListener } from './config/firebase';
 import { storage } from './services/storage';
 
 window.addEventListener('DOMContentLoaded', async () => {
@@ -35,15 +35,17 @@ window.addEventListener('DOMContentLoaded', async () => {
     }
   }
 
-  // Firebase Auth background initialization
-  initAuthListener(async (user) => {
-    if (user) {
-      console.log('[Auth] Signed in as:', user.uid);
-      await storage.syncWithCloud();
-    } else {
-      // Auto sign in anonymously for seamless frictionless mobile onboarding
-      loginAnonymously().catch(() => {});
+  // Firebase Auth background initialization with Player Account Whitelist
+  initAuthListener(async (profile) => {
+    if (profile) {
+      console.log('[Auth] Signed in as:', profile.email, 'Role:', profile.role, 'Status:', profile.status);
+      if (profile.status === 'APPROVED') {
+        await storage.syncWithCloud();
+        const currentSave = storage.getSave();
+        game.initLevel(currentSave.level);
+      }
     }
+    ui.handleAuthStateChange(profile);
   });
 
   // Start with pre-level briefing for Level 1 (or current saved level)
