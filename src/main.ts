@@ -25,10 +25,23 @@ window.addEventListener('DOMContentLoaded', async () => {
     game.resize();
   });
 
-  // Handle PWA Service Worker Registration
+  // Handle PWA Service Worker Registration & Live Auto-Update
   if ('serviceWorker' in navigator) {
     try {
-      await navigator.serviceWorker.register('./sw.js');
+      const reg = await navigator.serviceWorker.register('./sw.js');
+      reg.addEventListener('updatefound', () => {
+        const newWorker = reg.installing;
+        if (newWorker) {
+          newWorker.addEventListener('statechange', () => {
+            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+              console.log('[PWA] New version installed! Reloading to apply updates...');
+              window.location.reload();
+            }
+          });
+        }
+      });
+      // Force immediate check for fresh bundle
+      reg.update().catch(() => {});
       console.log('[PWA] Service Worker registered successfully.');
     } catch (e) {
       console.warn('[PWA] Service worker registration error:', e);

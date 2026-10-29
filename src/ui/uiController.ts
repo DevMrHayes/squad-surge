@@ -405,6 +405,23 @@ export class UIController {
       this.profileModal.classList.add('hidden');
     });
 
+    // Force PWA Cache Clear & Hard Reload
+    document.getElementById('btnForceCacheClear')?.addEventListener('click', async () => {
+      try {
+        if ('caches' in window) {
+          const keys = await caches.keys();
+          await Promise.all(keys.map(k => caches.delete(k)));
+        }
+        if ('serviceWorker' in navigator) {
+          const regs = await navigator.serviceWorker.getRegistrations();
+          await Promise.all(regs.map(r => r.unregister()));
+        }
+      } catch (e) {
+        console.warn('Cache clear error:', e);
+      }
+      window.location.reload();
+    });
+
     // Auth Modal Triggers
     document.getElementById('btnOpenAuth')?.addEventListener('click', () => {
       this.authModal.classList.remove('hidden');
