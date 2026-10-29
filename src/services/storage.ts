@@ -1,6 +1,6 @@
 // Persistent Storage & Cloud Synchronization Manager
 import { SaveData } from '../types/game';
-import { saveProfileToCloud, loadProfileFromCloud } from '../config/firebase';
+import { saveProfileToCloud, loadProfileFromCloud, onCloudSaveSnapshot } from '../config/firebase';
 
 const STORAGE_KEY = 'squad_surge_save_v1';
 
@@ -39,6 +39,9 @@ export class StorageManager {
 
   constructor() {
     this.currentSave = this.loadLocal();
+    onCloudSaveSnapshot((cloudSave) => {
+      this.mergeCloudSave(cloudSave, false);
+    });
   }
 
   public getSave(): SaveData {
@@ -70,53 +73,90 @@ export class StorageManager {
     }
   }
 
-  public saveLocal(): void {
+  public saveLocal(syncCloud = true): void {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(this.currentSave));
       this.notify();
-      // Debounced fire-and-forget sync to Firebase
-      saveProfileToCloud(this.currentSave).catch(() => {});
+      if (syncCloud) {
+        saveProfileToCloud(this.currentSave).catch(() => {});
+      }
     } catch (e) {
       console.error('[Storage] Error saving state:', e);
     }
   }
 
+  public mergeCloudSave(cloudSave: SaveData, forcePushToCloud = false): boolean {
+    if (!cloudSave) return false;
+
+    const beforeJson = JSON.stringify(this.currentSave);
+    const cloudBeforeJson = JSON.stringify(cloudSave);
+
+    // Merge favoring highest campaign progression across devices
+    const mergedMaxLevel = Math.max(
+      this.currentSave.maxLevel || 1,
+      this.currentSave.level || 1,
+      cloudSave.maxLevel || 1,
+      cloudSave.level || 1
+    );
+    const mergedLevel = Math.max(
+      this.currentSave.level || 1,
+      cloudSave.level || 1,
+      mergedMaxLevel
+    );
+
+    this.currentSave.level = Math.min(100, mergedLevel);
+    this.currentSave.maxLevel = Math.min(100, mergedMaxLevel);
+    this.currentSave.coins = Math.max(this.currentSave.coins || 0, cloudSave.coins || 0);
+
+    if (cloudSave.upgrades) {
+      for (const [k, v] of Object.entries(cloudSave.upgrades)) {
+        const key = k as keyof typeof this.currentSave.upgrades;
+        if (key in this.currentSave.upgrades) {
+          this.currentSave.upgrades[key] = Math.max(this.currentSave.upgrades[key] || 1, Number(v) || 1);
+        }
+      }
+    }
+    if (cloudSave.stats) {
+      for (const [k, v] of Object.entries(cloudSave.stats)) {
+        const key = k as keyof typeof this.currentSave.stats;
+        if (key in this.currentSave.stats) {
+          this.currentSave.stats[key] = Math.max(this.currentSave.stats[key] || 0, Number(v) || 0);
+        }
+      }
+    }
+    // Ensure endless survival personal bests are explicitly preserved & maximized
+    this.currentSave.stats.endlessBestTime = Math.max(
+      this.currentSave.stats.endlessBestTime || 0,
+      cloudSave.stats?.endlessBestTime || 0
+    );
+    this.currentSave.stats.endlessBestLevel = Math.max(
+      this.currentSave.stats.endlessBestLevel || 1,
+      cloudSave.stats?.endlessBestLevel || 1
+    );
+    if (cloudSave.achievements) {
+      this.currentSave.achievements = {
+        ...this.currentSave.achievements,
+        ...cloudSave.achievements,
+      };
+    }
+
+    const afterJson = JSON.stringify(this.currentSave);
+    const localChanged = beforeJson !== afterJson;
+    const cloudNeedsUpdate = forcePushToCloud || afterJson !== cloudBeforeJson;
+
+    if (localChanged || cloudNeedsUpdate) {
+      this.saveLocal(cloudNeedsUpdate);
+    }
+    return localChanged;
+  }
+
   public async syncWithCloud(): Promise<void> {
     const cloudSave = await loadProfileFromCloud();
     if (cloudSave) {
-      // Merge favoring higher progress
-      this.currentSave.level = Math.max(this.currentSave.level, cloudSave.level || 1);
-      this.currentSave.maxLevel = Math.max(this.currentSave.maxLevel, cloudSave.maxLevel || 1);
-      this.currentSave.coins = Math.max(this.currentSave.coins, cloudSave.coins || 0);
-      
-      if (cloudSave.upgrades) {
-        for (const [k, v] of Object.entries(cloudSave.upgrades)) {
-          const key = k as keyof typeof this.currentSave.upgrades;
-          this.currentSave.upgrades[key] = Math.max(this.currentSave.upgrades[key] || 1, v || 1);
-        }
-      }
-      if (cloudSave.stats) {
-        for (const [k, v] of Object.entries(cloudSave.stats)) {
-          const key = k as keyof typeof this.currentSave.stats;
-          this.currentSave.stats[key] = Math.max(this.currentSave.stats[key] || 0, v || 0);
-        }
-      }
-      // Ensure endless survival personal bests are explicitly preserved & maximized
-      this.currentSave.stats.endlessBestTime = Math.max(
-        this.currentSave.stats.endlessBestTime || 0,
-        cloudSave.stats?.endlessBestTime || 0
-      );
-      this.currentSave.stats.endlessBestLevel = Math.max(
-        this.currentSave.stats.endlessBestLevel || 1,
-        cloudSave.stats?.endlessBestLevel || 1
-      );
-      if (cloudSave.achievements) {
-        this.currentSave.achievements = {
-          ...this.currentSave.achievements,
-          ...cloudSave.achievements,
-        };
-      }
-      this.saveLocal();
+      this.mergeCloudSave(cloudSave, true);
+    } else {
+      // Ensure current local state is pushed if cloud was empty
+      await saveProfileToCloud(this.currentSave).catch(() => {});
     }
   }
 

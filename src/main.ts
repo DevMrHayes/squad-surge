@@ -54,6 +54,33 @@ window.addEventListener('DOMContentLoaded', async () => {
     }
   }
 
+  // Keep active level & briefing synchronized when real-time cloud snapshot updates progression
+  storage.onUpdate((updatedSave) => {
+    if (game.mode !== 'PLAYING' && !game.isEndless && game.currentLevel < updatedSave.level) {
+      game.initLevel(updatedSave.level, false);
+      if (ui) ui.showStartBriefing();
+    } else if (game.mode !== 'PLAYING' && ui) {
+      ui.updateHUD(
+        game.currentLevel,
+        game.enemiesLeft,
+        game.totalEnemiesInLevel,
+        updatedSave.coins,
+        game.isEndless,
+        game.endlessTimeSurvived,
+        game.endlessThreatLevel
+      );
+    }
+  });
+
+  // Re-sync with cloud when switching devices / returning to app tab
+  const syncOnResume = () => {
+    if (document.visibilityState === 'visible') {
+      storage.syncWithCloud().catch(() => {});
+    }
+  };
+  window.addEventListener('focus', syncOnResume);
+  document.addEventListener('visibilitychange', syncOnResume);
+
   // Firebase Auth background initialization with Player Account Whitelist
   initAuthListener(async (profile) => {
     if (profile) {
@@ -64,7 +91,7 @@ window.addEventListener('DOMContentLoaded', async () => {
         // Never disrupt an active Endless Survival session or active combat
         if (game.mode !== 'PLAYING') {
           if (!game.isEndless) {
-            game.initLevel(currentSave.level);
+            game.initLevel(currentSave.level, false);
           }
           ui.showStartBriefing();
         }

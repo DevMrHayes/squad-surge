@@ -22,7 +22,7 @@ service cloud.firestore {
     //       - coins: number (required, 0..1000000000)
     //       - selectedPerkIdx: number (required, 0..50)
     //       - upgrades: map (required, startSquad, firepower, fireRate, armorPierce, specialistChance)
-    //       - stats: map (required, totalKills, bossesDefeated, gatesCharged, altarsUsed, ricochetKills, highestSquad, gamesPlayed, victories)
+    //       - stats: map (required, totalKills, bossesDefeated, gatesCharged, altarsUsed, ricochetKills, highestSquad, gamesPlayed, victories, optional: highScore, endlessBestTime, endlessBestLevel)
     //       - achievements: map (required, string -> bool, max 100 entries)
     //       - userId: string (optional, max 128 chars)
     //       - displayName: string (optional, max 100 chars)
@@ -118,7 +118,8 @@ service cloud.firestore {
              stats.keys().hasOnly([
                'totalKills', 'bossesDefeated', 'gatesCharged', 
                'altarsUsed', 'ricochetKills', 'highestSquad', 
-               'gamesPlayed', 'victories', 'highScore'
+               'gamesPlayed', 'victories', 'highScore',
+               'endlessBestTime', 'endlessBestLevel'
              ]) &&
              stats.totalKills is number && stats.totalKills >= 0 &&
              stats.bossesDefeated is number && stats.bossesDefeated >= 0 &&
@@ -128,7 +129,9 @@ service cloud.firestore {
              stats.highestSquad is number && stats.highestSquad >= 0 &&
              stats.gamesPlayed is number && stats.gamesPlayed >= 0 &&
              stats.victories is number && stats.victories >= 0 &&
-             (!('highScore' in stats) || (stats.highScore is number && stats.highScore >= 0));
+             (!('highScore' in stats) || (stats.highScore is number && stats.highScore >= 0)) &&
+             (!('endlessBestTime' in stats) || (stats.endlessBestTime is number && stats.endlessBestTime >= 0)) &&
+             (!('endlessBestLevel' in stats) || (stats.endlessBestLevel is number && stats.endlessBestLevel >= 1));
     }
 
     // Game progress SaveData validation (strict type safety & DoS bounds)

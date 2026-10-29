@@ -488,8 +488,22 @@ export class UIController {
     } else {
       this.pendingModal.classList.add('hidden');
       this.authModal.classList.add('hidden');
-      this.updateHUD(this.game.currentLevel, this.game.enemiesLeft, this.game.totalEnemiesInLevel, storage.getSave().coins);
-      this.showStartBriefing();
+      const save = storage.getSave();
+      if (this.game.mode !== 'PLAYING' && !this.game.isEndless && this.game.currentLevel !== save.level) {
+        this.game.initLevel(save.level, false);
+      }
+      this.updateHUD(
+        this.game.currentLevel,
+        this.game.enemiesLeft,
+        this.game.totalEnemiesInLevel,
+        save.coins,
+        this.game.isEndless,
+        this.game.endlessTimeSurvived,
+        this.game.endlessThreatLevel
+      );
+      if (this.game.mode !== 'PLAYING') {
+        this.showStartBriefing();
+      }
     }
   }
 
@@ -585,6 +599,11 @@ export class UIController {
       if (this.game.mode === 'PLAYING') this.game.pause();
       this.renderLevelMap();
       this.mapModal.classList.remove('hidden');
+      storage.syncWithCloud().then(() => {
+        if (!this.mapModal.classList.contains('hidden')) {
+          this.renderLevelMap();
+        }
+      }).catch(() => {});
     });
 
     document.getElementById('btnCloseMap')?.addEventListener('click', () => {
@@ -602,6 +621,11 @@ export class UIController {
       } else {
         this.renderProfile();
         this.profileModal.classList.remove('hidden');
+        storage.syncWithCloud().then(() => {
+          if (!this.profileModal.classList.contains('hidden')) {
+            this.renderProfile();
+          }
+        }).catch(() => {});
       }
     });
 
@@ -609,6 +633,11 @@ export class UIController {
     document.getElementById('btnProfile')?.addEventListener('click', () => {
       this.renderProfile();
       this.profileModal.classList.remove('hidden');
+      storage.syncWithCloud().then(() => {
+        if (!this.profileModal.classList.contains('hidden')) {
+          this.renderProfile();
+        }
+      }).catch(() => {});
     });
 
     document.getElementById('btnCloseProfile')?.addEventListener('click', () => {

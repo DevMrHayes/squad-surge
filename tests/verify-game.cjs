@@ -938,6 +938,33 @@ it('Campaign level generation is 100% deterministic across repeated attempts', (
   assert.deepStrictEqual(run1, run2, 'Replaying a campaign level produces identical enemy stats and timings');
 });
 
+// 37. Cross-Device Identity & Level Cloud Sync + Firestore Security Rules Compatibility
+it('Cross-device cloud sync merges level/maxLevel and aligns with Firestore Security Rules', () => {
+  const fs = require('fs');
+  const path = require('path');
+  const rulesSrc = fs.readFileSync(path.join(__dirname, '../firestore.rules'), 'utf8');
+  const firebaseSrc = fs.readFileSync(path.join(__dirname, '../src/config/firebase.ts'), 'utf8');
+  const storageSrc = fs.readFileSync(path.join(__dirname, '../src/services/storage.ts'), 'utf8');
+  const uiSrc = fs.readFileSync(path.join(__dirname, '../src/ui/uiController.ts'), 'utf8');
+
+  // 1. Firestore rules permit endlessBestTime and endlessBestLevel in stats
+  assert.ok(rulesSrc.includes("'endlessBestTime'") && rulesSrc.includes("'endlessBestLevel'"), 'Firestore rules allow endlessBestTime and endlessBestLevel');
+
+  // 2. firebase.ts sanitizes saveData, omits undefined photoURL, and attaches real-time onSnapshot
+  assert.ok(firebaseSrc.includes('export function sanitizeSaveData'), 'firebase.ts sanitizes SaveData schema before Firestore writes');
+  assert.ok(!firebaseSrc.includes('photoURL: user.photoURL || undefined'), 'firebase.ts does not pass undefined photoURL to setDoc');
+  assert.ok(firebaseSrc.includes('onSnapshot'), 'firebase.ts subscribes to real-time profile snapshots across devices');
+
+  // 3. storage.ts merges level and maxLevel across devices
+  assert.ok(storageSrc.includes('mergeCloudSave'), 'storage.ts implements bidirectional mergeCloudSave');
+
+  // 4. uiController.ts initializes game level when auth state changes
+  assert.ok(
+    uiSrc.includes('this.game.initLevel(save.level, false)'),
+    'handleAuthStateChange updates game.currentLevel to match synced cloud save.level'
+  );
+});
+
 console.log('====================================================');
 console.log(`  Tests Completed: ${passedTests} / ${totalTests} Passed`);
 console.log('====================================================');
