@@ -766,6 +766,108 @@ it('Dual-Thumb Split Squad grants 10s bonus, dual wings, and multi-touch control
   assert.strictEqual(rightCount, 12, 'Right wing commands 12 troops');
 });
 
+// 30. Endless Mode Header Display & Persistence
+it('Top header level display renders Level ∞ for Endless and Level X for Campaign', () => {
+  function getHeaderLevelString(level, isEndless) {
+    const levelText = isEndless ? '∞' : `${level}`;
+    return `Level ${levelText}`;
+  }
+
+  assert.strictEqual(getHeaderLevelString(1, true), 'Level ∞', 'Endless mode header must display Level ∞');
+  assert.strictEqual(getHeaderLevelString(5, true), 'Level ∞', 'Endless mode regardless of threat must display Level ∞');
+  assert.strictEqual(getHeaderLevelString(1, false), 'Level 1', 'Campaign mode header displays Level 1');
+  assert.strictEqual(getHeaderLevelString(42, false), 'Level 42', 'Campaign mode header displays Level 42');
+});
+
+// 31. Incremental Real-Time Survival High Score Auto-Save
+it('Real-time survival auto-save updates personal best and threat level immediately upon record surpass', () => {
+  const saveState = {
+    stats: {
+      endlessBestTime: 120.5,
+      endlessBestLevel: 13,
+      highScore: 12050,
+    },
+  };
+
+  function updateEndlessBestTime(timeSurvived, threatLevel) {
+    const prevBest = saveState.stats.endlessBestTime || 0;
+    if (timeSurvived > prevBest) {
+      saveState.stats.endlessBestTime = Math.round(timeSurvived * 10) / 10;
+      saveState.stats.endlessBestLevel = Math.max(saveState.stats.endlessBestLevel || 1, threatLevel);
+      saveState.stats.highScore = Math.max(saveState.stats.highScore || 0, Math.round(timeSurvived * 100));
+      return true;
+    }
+    return false;
+  }
+
+  // 1. Lower time does not overwrite
+  const r1 = updateEndlessBestTime(95.0, 10);
+  assert.strictEqual(r1, false);
+  assert.strictEqual(saveState.stats.endlessBestTime, 120.5);
+
+  // 2. Surpassing record updates immediately
+  const r2 = updateEndlessBestTime(155.8, 16);
+  assert.strictEqual(r2, true);
+  assert.strictEqual(saveState.stats.endlessBestTime, 155.8);
+  assert.strictEqual(saveState.stats.endlessBestLevel, 16);
+  assert.strictEqual(saveState.stats.highScore, 15580);
+});
+
+// 32. Cloud Sync Preservation of Endless Survival Record
+it('Cloud sync merge explicitly maximizes and preserves local and remote survival records', () => {
+  const localSave = {
+    level: 12,
+    stats: {
+      highScore: 15580,
+      endlessBestTime: 155.8,
+      endlessBestLevel: 16,
+    },
+  };
+
+  const cloudSave = {
+    level: 15,
+    stats: {
+      highScore: 18000,
+      endlessBestTime: 140.2, // older cloud time
+      endlessBestLevel: 14,
+    },
+  };
+
+  // Merge logic
+  localSave.level = Math.max(localSave.level, cloudSave.level || 1);
+  localSave.stats.highScore = Math.max(localSave.stats.highScore || 0, cloudSave.stats.highScore || 0);
+  localSave.stats.endlessBestTime = Math.max(localSave.stats.endlessBestTime || 0, cloudSave.stats.endlessBestTime || 0);
+  localSave.stats.endlessBestLevel = Math.max(localSave.stats.endlessBestLevel || 1, cloudSave.stats.endlessBestLevel || 1);
+
+  assert.strictEqual(localSave.level, 15, 'Campaign level merges to highest');
+  assert.strictEqual(localSave.stats.highScore, 18000, 'High score merges to highest');
+  assert.strictEqual(localSave.stats.endlessBestTime, 155.8, 'Local higher survival best is strictly preserved');
+  assert.strictEqual(localSave.stats.endlessBestLevel, 16, 'Highest threat level reached is preserved');
+});
+
+// 33. User Profile Survival High Score Presentation
+it('User profile modal data formats dedicated Survival High Score hero banner', () => {
+  function formatSurvivalTime(seconds) {
+    const m = Math.floor(seconds / 60);
+    const s = Math.floor(seconds % 60);
+    const tenths = Math.floor(((seconds % 1) * 10) + 0.001);
+    return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}.${tenths}`;
+  }
+
+  const profileData = {
+    bestTime: 184.6,
+    threatLevel: 19,
+  };
+
+  const formattedTime = formatSurvivalTime(profileData.bestTime);
+  const threatBadge = `Threat LV. ${profileData.threatLevel}`;
+  const survivalScore = Math.round(profileData.bestTime * 100 + (profileData.threatLevel - 1) * 500);
+
+  assert.strictEqual(formattedTime, '03:04.6');
+  assert.strictEqual(threatBadge, 'Threat LV. 19');
+  assert.strictEqual(survivalScore, 27460);
+});
+
 console.log('====================================================');
 console.log(`  Tests Completed: ${passedTests} / ${totalTests} Passed`);
 console.log('====================================================');

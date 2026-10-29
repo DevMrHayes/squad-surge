@@ -101,6 +101,8 @@ export async function getOrCreateUserProfile(user: User): Promise<UserAccountPro
         gamesPlayed: 0,
         victories: 0,
         highScore: 0,
+        endlessBestTime: 0,
+        endlessBestLevel: 1,
       },
       achievements: {},
     },

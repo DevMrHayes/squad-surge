@@ -48,7 +48,7 @@ export class UIController {
   public formatSurvivalTime(seconds: number): string {
     const m = Math.floor(seconds / 60);
     const s = Math.floor(seconds % 60);
-    const ms = Math.floor((seconds % 1) * 10);
+    const ms = Math.floor(((seconds % 1) * 10) + 0.001);
     return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}.${ms}`;
   }
 
@@ -62,7 +62,7 @@ export class UIController {
     endlessThreat?: number
   ): void {
     if (isEndless) {
-      if (this.uiLevelNum) this.uiLevelNum.textContent = `♾️ ${endlessThreat || 1}`;
+      if (this.uiLevelNum) this.uiLevelNum.textContent = '∞';
       const enemiesLabel = this.uiEnemiesLeft.parentElement?.querySelector('span:first-child');
       if (enemiesLabel) enemiesLabel.textContent = '⏱️ SURVIVAL TIME';
       if (this.uiEnemiesLeft) this.uiEnemiesLeft.textContent = this.formatSurvivalTime(endlessTime || 0);
@@ -98,6 +98,17 @@ export class UIController {
     const isEndless = this.game.isEndless;
     const plan = this.game.plan;
 
+    // Synchronize HUD immediately upon opening briefing so header displays Level ∞ or Level X cleanly
+    this.updateHUD(
+      this.game.currentLevel,
+      isEndless ? 0 : plan.totalEnemies,
+      isEndless ? 0 : plan.totalEnemies,
+      save.coins,
+      isEndless,
+      isEndless ? this.game.endlessTimeSurvived : 0,
+      isEndless ? this.game.endlessThreatLevel : 1
+    );
+
     // Update Mode Tabs Visual State to M3 Segmented Control
     const tabCampaign = document.getElementById('tabModeCampaign');
     const tabEndless = document.getElementById('tabModeEndless');
@@ -124,9 +135,10 @@ export class UIController {
       badgeEl.style.color = '#38bdf8';
 
       const bestTime = this.formatSurvivalTime(save.stats.endlessBestTime || 0);
+      const bestLevel = save.stats.endlessBestLevel || 1;
       rewardEl.textContent = `BEST: ${bestTime} ⏱️`;
       titleEl.textContent = 'INFINITE HIGHWAY SURVIVAL';
-      ruleTitleEl.textContent = 'Hold The Line • Dynamic Threat Escalation';
+      ruleTitleEl.textContent = `Dynamic Threat Escalation • Best: ${bestTime} (Threat ${bestLevel})`;
       ruleDescEl.textContent = 'Enemies, Brutes, and Bosses scale continuously every 10 seconds. Survive as long as you can to set the high score!';
       if (deployBtn) deployBtn.innerHTML = '<span>🚀 DEPLOY SURVIVAL SQUAD</span>';
     } else {
@@ -863,8 +875,27 @@ export class UIController {
 
     const statHighScore = document.getElementById('statHighScore');
     if (statHighScore) statHighScore.textContent = `${save.stats.highScore || 0}`;
+
+    // Prominent Infinite Survival High Score Hero Card
+    const statSurvivalBestTime = document.getElementById('statSurvivalBestTime');
+    if (statSurvivalBestTime) statSurvivalBestTime.textContent = this.formatSurvivalTime(save.stats.endlessBestTime || 0);
+
+    const statSurvivalThreat = document.getElementById('statSurvivalThreat');
+    if (statSurvivalThreat) statSurvivalThreat.textContent = `Threat LV. ${save.stats.endlessBestLevel || 1}`;
+
+    const statSurvivalScoreRating = document.getElementById('statSurvivalScoreRating');
+    if (statSurvivalScoreRating) {
+      const survSecs = save.stats.endlessBestTime || 0;
+      const survThreat = save.stats.endlessBestLevel || 1;
+      const pts = Math.round(survSecs * 100 + (survThreat - 1) * 500);
+      statSurvivalScoreRating.textContent = `${pts.toLocaleString()} pts`;
+    }
+
     const statEndlessTime = document.getElementById('statEndlessTime');
-    if (statEndlessTime) statEndlessTime.textContent = this.formatSurvivalTime(save.stats.endlessBestTime || 0);
+    if (statEndlessTime) {
+      const bestT = this.formatSurvivalTime(save.stats.endlessBestTime || 0);
+      statEndlessTime.textContent = `${bestT}`;
+    }
     document.getElementById('statKills')!.textContent = `${save.stats.totalKills}`;
     document.getElementById('statBosses')!.textContent = `${save.stats.bossesDefeated}`;
     document.getElementById('statAltars')!.textContent = `${save.stats.altarsUsed}`;

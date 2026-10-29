@@ -154,6 +154,9 @@ export class GameLoop {
   }
 
   public initLevel(lvl: number, isEndless: boolean = false): void {
+    if (this.isEndless && this.endlessTimeSurvived > 0) {
+      storage.updateEndlessBestTime(this.endlessTimeSurvived, this.endlessThreatLevel);
+    }
     this.isEndless = isEndless;
     this.elapsed = 0;
     this.trauma = 0;
@@ -216,6 +219,9 @@ export class GameLoop {
   public pause(): void {
     if (this.mode === 'PLAYING') {
       this.mode = 'PAUSED';
+      if (this.isEndless && this.endlessTimeSurvived > 0) {
+        storage.updateEndlessBestTime(this.endlessTimeSurvived, this.endlessThreatLevel);
+      }
       sfx.pauseBGM();
     }
   }
@@ -546,13 +552,16 @@ export class GameLoop {
       }
       this.plan.scrollSpeed = Math.min(140, 75 + this.endlessThreatLevel * 2.2);
 
-      // In-Game Personal Best Surpassed Notification
+      // In-Game Personal Best Surpassed Notification & Real-Time Auto-Save
       const prevBest = storage.getSave().stats.endlessBestTime || 0;
-      if (prevBest >= 10 && !this.celebratedNewRecord && this.endlessTimeSurvived > prevBest) {
-        this.celebratedNewRecord = true;
-        this.spawnFloatText(this.cw / 2, this.ch * 0.35, '🏆 NEW PERSONAL BEST SURPASSED!', '#34d399');
-        sfx.playGateCharge();
-        this.trauma = Math.min(1.0, this.trauma + 0.25);
+      if (this.endlessTimeSurvived > prevBest) {
+        storage.updateEndlessBestTime(this.endlessTimeSurvived, this.endlessThreatLevel);
+        if (!this.celebratedNewRecord && this.endlessTimeSurvived >= 5) {
+          this.celebratedNewRecord = true;
+          this.spawnFloatText(this.cw / 2, this.ch * 0.35, '🏆 NEW PERSONAL BEST SURPASSED!', '#34d399');
+          sfx.playGateCharge();
+          this.trauma = Math.min(1.0, this.trauma + 0.25);
+        }
       }
 
       // Continuous endless queue refill

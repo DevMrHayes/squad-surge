@@ -101,6 +101,15 @@ export class StorageManager {
           this.currentSave.stats[key] = Math.max(this.currentSave.stats[key] || 0, v || 0);
         }
       }
+      // Ensure endless survival personal bests are explicitly preserved & maximized
+      this.currentSave.stats.endlessBestTime = Math.max(
+        this.currentSave.stats.endlessBestTime || 0,
+        cloudSave.stats?.endlessBestTime || 0
+      );
+      this.currentSave.stats.endlessBestLevel = Math.max(
+        this.currentSave.stats.endlessBestLevel || 1,
+        cloudSave.stats?.endlessBestLevel || 1
+      );
       if (cloudSave.achievements) {
         this.currentSave.achievements = {
           ...this.currentSave.achievements,
@@ -162,6 +171,18 @@ export class StorageManager {
     }
     this.saveLocal();
     return { isNewRecord, prevBest };
+  }
+
+  public updateEndlessBestTime(timeSurvived: number, threatLevel: number): boolean {
+    const prevBest = this.currentSave.stats.endlessBestTime || 0;
+    if (timeSurvived > prevBest) {
+      this.currentSave.stats.endlessBestTime = Math.round(timeSurvived * 10) / 10;
+      this.currentSave.stats.endlessBestLevel = Math.max(this.currentSave.stats.endlessBestLevel || 1, threatLevel);
+      this.currentSave.stats.highScore = Math.max(this.currentSave.stats.highScore || 0, Math.round(timeSurvived * 100));
+      this.saveLocal();
+      return true;
+    }
+    return false;
   }
 
   public unlockAchievement(id: string, reward: number): boolean {

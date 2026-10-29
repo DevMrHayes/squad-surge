@@ -61,7 +61,13 @@ window.addEventListener('DOMContentLoaded', async () => {
       if (profile.status === 'APPROVED') {
         await storage.syncWithCloud();
         const currentSave = storage.getSave();
-        game.initLevel(currentSave.level);
+        // Never disrupt an active Endless Survival session or active combat
+        if (game.mode !== 'PLAYING') {
+          if (!game.isEndless) {
+            game.initLevel(currentSave.level);
+          }
+          ui.showStartBriefing();
+        }
       }
     }
     ui.handleAuthStateChange(profile);
