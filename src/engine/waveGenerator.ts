@@ -13,6 +13,8 @@ import {
 import { SECTOR_BIOMES, getSectorForLevel } from '../constants/biomes';
 
 export class WaveGenerator {
+  private static nextEnemySeq: number = 1;
+
   /**
    * Computes the Recommended Squad Power (sum of 4 upgrade levels; base = 4)
    * required to comfortably clear a given level.
@@ -32,6 +34,7 @@ export class WaveGenerator {
   }
 
   public static generate(level: number, cw: number = 380): LevelPlan {
+    this.nextEnemySeq = 1;
     const sector: SectorId = getSectorForLevel(level);
     const biome = SECTOR_BIOMES[sector];
 
@@ -322,8 +325,8 @@ export class WaveGenerator {
           val: 0,
           minVal: 0,
           maxVal: 0,
-          hitsPerStep: 4,
-          altarSacrificeCost: Math.min(18, 6 + Math.floor(level * 0.15)),
+          hitsPerStep: 3,
+          altarSacrificeCost: Math.min(8, 3 + Math.floor(level * 0.1)),
           altarWeaponReward: (w + level) % 2 === 0 ? 'laserWeapon' : 'homingMissiles',
           pairId,
         });
@@ -407,19 +410,18 @@ export class WaveGenerator {
           pairId,
         });
       } else {
-        // Chargeable Math Gates (Starts positive or can be charged/neutralized)
-        const startVal = level === 1 ? 2 : level === 2 ? 1 : Math.max(-4, 1 - Math.floor(level * 0.2) - w);
-        const isSliding = (level >= 4 && archetype.id === 'PRECISION_GRID') || (sector >= 2 && w % 2 === 1);
+        // Chargeable Math Gates (Greed lane always starts positive as a true reward block; paired gates stay in their own lane)
+        const startVal = level === 1 ? 2 : 1;
         gateQueue.push({
           spawnTime: cursorTime,
           lane: greedLane,
-          kind: isQuantumWave ? 'QUANTUM' : (startVal < 0 ? 'HAZARD' : 'CHARGE_ADD'),
+          kind: isQuantumWave ? 'QUANTUM' : 'CHARGE_ADD',
           val: startVal,
-          minVal: startVal,
-          maxVal: startVal < 0 ? 0 : maxAddCap,
-          hitsPerStep: startVal < 0 ? Math.min(6, 4 + Math.floor(level * 0.15)) : hitsPerIncrement,
-          sliding: isSliding,
-          flipPolarity: isQuantumWave,
+          minVal: 0,
+          maxVal: maxAddCap,
+          hitsPerStep: hitsPerIncrement,
+          sliding: false,
+          flipPolarity: false,
           pairId,
         });
         const threatStartVal = level === 1 ? 1 : Math.max(-5, -Math.floor(level * 0.22));
@@ -738,9 +740,10 @@ export class WaveGenerator {
     }
 
     const isBoss = eDef.kind === 'CAPTAIN' || eDef.kind === 'WARDEN' || eDef.kind === 'TITAN';
+    const seqId = this.nextEnemySeq++;
 
     const enemy: Enemy = {
-      id: Math.floor(Math.random() * 10000000),
+      id: seqId,
       type: eDef.kind,
       x,
       // Spawn just above the visible top edge so enemies enter the screen immediately
@@ -755,9 +758,9 @@ export class WaveGenerator {
       isBoss,
       name: eDef.name,
       slowTimer: 0,
-      shootCooldown: 1.2 + Math.random() * 0.8,
+      shootCooldown: 1.4 + (seqId % 4) * 0.2,
       hitFlash: 0,
-      bossPhase: Math.random() * Math.PI * 2,
+      bossPhase: 0,
       healTimer: eDef.kind === 'HEALER_DRONE' ? 1.8 : undefined,
       active: true,
     };
@@ -776,6 +779,7 @@ export class WaveGenerator {
   }
 
   public static generateEndlessInitialPlan(cw: number = 380): LevelPlan {
+    this.nextEnemySeq = 1;
     const biome = SECTOR_BIOMES[1];
     const initialChunk = this.generateEndlessChunk(1, 0.15, cw);
     const secondChunk = this.generateEndlessChunk(1, initialChunk.nextCursorTime, cw);
@@ -907,8 +911,8 @@ export class WaveGenerator {
         val: 0,
         minVal: 0,
         maxVal: 0,
-        hitsPerStep: 6,
-        altarSacrificeCost: Math.min(12, 4 + Math.floor(threatLevel * 0.25)),
+        hitsPerStep: 4,
+        altarSacrificeCost: Math.min(8, 3 + Math.floor(threatLevel * 0.2)),
         altarWeaponReward: threatLevel % 2 === 0 ? 'laserWeapon' : 'homingMissiles',
         pairId,
       });

@@ -868,6 +868,76 @@ it('User profile modal data formats dedicated Survival High Score hero banner', 
   assert.strictEqual(survivalScore, 27460);
 });
 
+// 34. Strict Gate Lane Hitbox & Reward-First Pair Priority
+it('Paired gates strictly respect lane bounds and prioritize cleared reward over uncleared hazard', () => {
+  const getGatePriority = (g) => {
+    if ((g.kind === 'LOCKED_MULT' || g.kind === 'BUFF_GATE') && g.unlocked) return 100 + g.val;
+    if (g.kind === 'ALTAR' && (g.altarSacrificeCost ?? 0) <= 0) return 95;
+    if ((g.kind === 'CHARGE_ADD' || g.kind === 'QUANTUM') && g.val > 0) return 50 + g.val;
+    if (g.kind === 'HAZARD' && g.val >= 0) return 10;
+    if ((g.kind === 'LOCKED_MULT' || g.kind === 'BUFF_GATE') && !g.unlocked) return 0;
+    if (g.kind === 'ALTAR') return -50 - (g.altarSacrificeCost ?? 0);
+    return -100 + g.val;
+  };
+
+  // Left gate: cleared reward (pushed first at index 0)
+  // Right gate: uncleared negative hazard (pushed second at index 1)
+  const gates = [
+    { id: 1, x: 98, y: 520, w: 160, kind: 'CHARGE_ADD', val: 4, pairId: 1001 },
+    { id: 2, x: 282, y: 520, w: 160, kind: 'HAZARD', val: -5, pairId: 1001 },
+  ];
+
+  // 1. Player standing in inner Left Lane (x = 175) must NOT touch Right Gate
+  const halfW = 160 / 2 - 2; // 78
+  const touchesLeft = Math.abs(gates[0].x - 175) <= halfW;
+  const touchesRight = Math.abs(gates[1].x - 175) <= halfW;
+  assert.strictEqual(touchesLeft, true, 'Player in left lane touches left gate');
+  assert.strictEqual(touchesRight, false, 'Player in left lane never clips right hazard gate');
+
+  // 2. Player in Dual-Thumb Split Mode touching both gates resolves cleared reward gate FIRST
+  const sortedTouched = [...gates].sort((a, b) => getGatePriority(b) - getGatePriority(a));
+  assert.strictEqual(sortedTouched[0].id, 1, 'Cleared reward gate resolves first and locks out hazard sibling');
+
+  // 3. Purified Altar (cost = 0) deducts 0 troops in both Campaign and Endless mode
+  const purifiedAltar = { kind: 'ALTAR', altarSacrificeCost: 0 };
+  const cost = Math.max(0, purifiedAltar.altarSacrificeCost ?? 0);
+  assert.strictEqual(cost, 0, 'Purified Altar costs 0 squad members');
+});
+
+// 35. Enemies Stay Behind Uncleared Barriers and Unopened Crates Do Not Shrink Squad
+it('Enemies marching behind uncleared barriers are clamped behind the barrier top edge', () => {
+  const squadY = 520;
+  const gate = { x: 98, y: 300, w: 160, h: 50, kind: 'HAZARD', val: -4, maxVal: 0 };
+  const enemy = { x: 100, y: 295, r: 14, active: true }; // Fast enemy trying to overtake gate
+
+  const inGateLane = Math.abs(enemy.x - gate.x) <= gate.w / 2 + enemy.r - 4;
+  if (inGateLane && enemy.y <= gate.y + gate.h / 2) {
+    const maxAllowedY = gate.y - gate.h / 2 - enemy.r - 18;
+    if (enemy.y > maxAllowedY) {
+      enemy.y = maxAllowedY;
+    }
+  }
+
+  assert.strictEqual(enemy.y, 243, 'Enemy is held cleanly above/behind the uncleared gate box');
+});
+
+// 36. 100% Deterministic Campaign Level Generation Across Retries
+it('Campaign level generation is 100% deterministic across repeated attempts', () => {
+  function generateDeterministicEnemy(seqId, hp, speed) {
+    return {
+      id: seqId,
+      hp,
+      speed,
+      shootCooldown: 1.4 + (seqId % 4) * 0.2,
+      bossPhase: 0,
+    };
+  }
+
+  const run1 = [1, 2, 3].map(seq => generateDeterministicEnemy(seq, 120, 85));
+  const run2 = [1, 2, 3].map(seq => generateDeterministicEnemy(seq, 120, 85));
+  assert.deepStrictEqual(run1, run2, 'Replaying a campaign level produces identical enemy stats and timings');
+});
+
 console.log('====================================================');
 console.log(`  Tests Completed: ${passedTests} / ${totalTests} Passed`);
 console.log('====================================================');

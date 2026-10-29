@@ -651,6 +651,7 @@ export class GameLoop {
 
     // Prevent enemies from phasing or getting stuck: bounce them into open lanes
     CombatEngine.handleEnemyObstacleCollisions(this.enemies, this.obstacles, this.cw, dt);
+    CombatEngine.keepEnemiesBehindBarriers(this.enemies, this.gates, this.crates, squadY);
 
     CombatEngine.handleGateAndCrateHits(
       this.gates, 
@@ -676,14 +677,13 @@ export class GameLoop {
     );
 
     // 5. Update Descending Gates
-    const collectHalfW = Math.min(48, 16 + Math.sqrt(this.player.count) * 3.5);
     for (let i = this.gates.length - 1; i >= 0; i--) {
       const g = this.gates[i];
       g.y += this.plan.scrollSpeed * dt;
       if (g.hitScale > 0) g.hitScale = Math.max(0, g.hitScale - dt * 6);
 
-      // Sliding gate horizontal oscillation
-      if (g.sliding) {
+      // Sliding gate horizontal oscillation (only for unpaired single gates; paired gates stay strictly in their own lane)
+      if (g.sliding && !g.pairId) {
         g.x += (g.slideSpeed || 48) * (g.slideDir || 1) * dt;
         const minX = 28 + g.w / 2;
         const maxX = this.cw - 28 - g.w / 2;
@@ -691,94 +691,113 @@ export class GameLoop {
         if (g.x >= maxX) { g.x = maxX; g.slideDir = -1; }
       }
 
-      // Quantum polarity flipping (Sector 5)
-      if (g.flipPolarity && g.val < g.maxVal) {
-        g.polarityTimer = (g.polarityTimer ?? 3.0) - dt;
-        if (g.polarityTimer <= 0) {
-          g.polarityTimer = 3.0;
-          g.val = -g.val || -3;
-        }
-      }
-
-      // Traversal through gate
-      const touchesGate = isSplitMode
-        ? (Math.abs(g.y - squadY) <= 22 && (
-            Math.abs(g.x - (this.player.leftWingX ?? this.player.x)) <= g.w / 2 + 20 ||
-            Math.abs(g.x - (this.player.rightWingX ?? this.player.x)) <= g.w / 2 + 20
-          ))
-        : (Math.abs(g.y - squadY) <= 22 && Math.abs(g.x - this.player.x) <= g.w / 2 + collectHalfW * 0.4);
-
-      if (touchesGate) {
-        // MUTUAL EXCLUSION: If gate is paired, shatter the sibling gate in this dilemma row
-        if (g.pairId) {
-          for (let s = this.gates.length - 1; s >= 0; s--) {
-            const sib = this.gates[s];
-            if (sib.id !== g.id && sib.pairId === g.pairId) {
-              CombatEngine.createExplosionParticles(sib.x, sib.y, '#94a3b8', this.particles, 10, true);
-              this.spawnFloatText(sib.x, squadY - 24, '🚫 LOCKED OUT', '#94a3b8');
-              this.gates.splice(s, 1);
-              if (s < i) i--;
-            }
-          }
-        }
-        const squadCap = this.isEndless ? 40 : 220;
-        if ((g.kind === 'LOCKED_MULT' || g.kind === 'BUFF_GATE') && !g.unlocked) {
-          this.spawnFloatText(this.player.x, squadY - 28, '🔒 LOCKED GATE (NO EFFECT)', '#94a3b8');
-        } else if (g.kind === 'LOCKED_MULT') {
-          const added = this.isEndless
-            ? Math.min(3, Math.max(1, g.val))
-            : Math.min(40, Math.round(this.player.count * (g.val - 1)));
-          this.player.count = Math.min(squadCap, this.player.count + added);
-          sfx.playGateCharge();
-          CombatEngine.updateSquadFormation(this.player);
-          this.spawnFloatText(this.player.x, squadY - 28, this.isEndless ? `+${added} SQUAD` : `x${g.val} SQUAD!`, '#34d399');
-        } else if (g.kind === 'BUFF_GATE') {
-          if (g.boostType) this.unlockTacticalBoost(g.boostType, g.x, g.y, g.color || '#fde047');
-        } else if (g.kind === 'ALTAR') {
-          const cost = this.isEndless
-            ? Math.max(5, Math.ceil(this.player.count * 0.35))
-            : Math.max(0, g.altarSacrificeCost ?? 0);
-          const actualDeduct = Math.min(this.player.count - 1, cost);
-          this.player.count = Math.max(1, this.player.count - actualDeduct);
-          save.stats.altarsUsed++;
-          if (g.altarWeaponReward === 'laserWeapon') {
-            this.player.buffs.laserWeapon = true;
-            this.spawnFloatText(this.player.x, squadY - 30, '⚡ LASER EVOLVED!', '#c084fc');
-          } else {
-            this.player.buffs.homingMissiles = true;
-            this.spawnFloatText(this.player.x, squadY - 30, '🚀 HOMING MISSILES!', '#f43f5e');
-          }
-          sfx.playAltarSacrifice();
-          CombatEngine.createShockwave(this.player.x, squadY, '#c084fc', this.shockwaves, 72);
-          CombatEngine.updateSquadFormation(this.player);
-        } else if (g.kind === 'CHARGE_ADD' || g.kind === 'HAZARD' || g.kind === 'QUANTUM') {
-          const delta = g.val;
-          if (delta > 0) {
-            this.player.count = Math.min(squadCap, this.player.count + delta);
-            sfx.playGateCharge();
-            this.spawnFloatText(this.player.x, squadY - 28, `+${delta} SQUAD`, '#38bdf8');
-          } else if (delta < 0) {
-            if (this.damageSquad(Math.abs(delta), `HAZARD ${delta}!`)) return;
-          }
-          CombatEngine.updateSquadFormation(this.player);
-        }
-
+      if (g.y > this.ch + 45) {
         this.gates.splice(i, 1);
-        continue;
       }
-
-      if (g.y > this.ch + 45) this.gates.splice(i, 1);
     }
 
-    // 6. Update Descending Crates
+    // Prioritize cleared/positive reward gates first when resolving gate traversal at squadY
+    const getGatePriority = (g: typeof this.gates[number]): number => {
+      if ((g.kind === 'LOCKED_MULT' || g.kind === 'BUFF_GATE') && g.unlocked) return 100 + g.val;
+      if (g.kind === 'ALTAR' && (g.altarSacrificeCost ?? 0) <= 0) return 95;
+      if ((g.kind === 'CHARGE_ADD' || g.kind === 'QUANTUM') && g.val > 0) return 50 + g.val;
+      if (g.kind === 'HAZARD' && g.val >= 0) return 10;
+      if ((g.kind === 'LOCKED_MULT' || g.kind === 'BUFF_GATE') && !g.unlocked) return 0;
+      if (g.kind === 'ALTAR') return -50 - (g.altarSacrificeCost ?? 0);
+      return -100 + g.val;
+    };
+
+    const touchedGates = this.gates
+      .filter(g => {
+        if (Math.abs(g.y - squadY) > 22) return false;
+        const halfW = g.w / 2 - 2; // Strictly within visual gate bounds (never bleeding across the center median)
+        if (isSplitMode) {
+          const lx = this.player.leftWingX ?? this.player.x;
+          const rx = this.player.rightWingX ?? this.player.x;
+          return Math.abs(g.x - lx) <= halfW || Math.abs(g.x - rx) <= halfW;
+        }
+        return Math.abs(g.x - this.player.x) <= halfW;
+      })
+      .sort((a, b) => getGatePriority(b) - getGatePriority(a));
+
+    for (const g of touchedGates) {
+      const idx = this.gates.findIndex(item => item.id === g.id);
+      if (idx === -1) continue; // Already shattered by sibling mutual exclusion
+
+      // MUTUAL EXCLUSION: If gate is paired, shatter the sibling gate in this dilemma row
+      if (g.pairId) {
+        for (let s = this.gates.length - 1; s >= 0; s--) {
+          const sib = this.gates[s];
+          if (sib.id !== g.id && sib.pairId === g.pairId) {
+            CombatEngine.createExplosionParticles(sib.x, sib.y, '#94a3b8', this.particles, 10, true);
+            this.spawnFloatText(sib.x, squadY - 24, '🚫 LOCKED OUT', '#94a3b8');
+            this.gates.splice(s, 1);
+          }
+        }
+      }
+
+      const squadCap = this.isEndless ? 40 : 220;
+      if ((g.kind === 'LOCKED_MULT' || g.kind === 'BUFF_GATE') && !g.unlocked) {
+        this.spawnFloatText(this.player.x, squadY - 28, '🔒 LOCKED GATE (NO EFFECT)', '#94a3b8');
+      } else if (g.kind === 'LOCKED_MULT') {
+        const added = this.isEndless
+          ? Math.min(3, Math.max(1, g.val))
+          : Math.min(40, Math.round(this.player.count * (g.val - 1)));
+        this.player.count = Math.min(squadCap, this.player.count + added);
+        sfx.playGateCharge();
+        CombatEngine.updateSquadFormation(this.player);
+        this.spawnFloatText(this.player.x, squadY - 28, this.isEndless ? `+${added} SQUAD` : `x${g.val} SQUAD!`, '#34d399');
+      } else if (g.kind === 'BUFF_GATE') {
+        if (g.boostType) this.unlockTacticalBoost(g.boostType, g.x, g.y, g.color || '#fde047');
+      } else if (g.kind === 'ALTAR') {
+        const cost = Math.max(0, g.altarSacrificeCost ?? 0);
+        if (cost > 0) {
+          const actualDeduct = Math.min(this.player.count - 1, cost);
+          this.player.count = Math.max(1, this.player.count - actualDeduct);
+        }
+        save.stats.altarsUsed++;
+        if (g.altarWeaponReward === 'laserWeapon') {
+          this.player.buffs.laserWeapon = true;
+          this.spawnFloatText(this.player.x, squadY - 30, '⚡ LASER EVOLVED!', '#c084fc');
+        } else {
+          this.player.buffs.homingMissiles = true;
+          this.spawnFloatText(this.player.x, squadY - 30, '🚀 HOMING MISSILES!', '#f43f5e');
+        }
+        sfx.playAltarSacrifice();
+        CombatEngine.createShockwave(this.player.x, squadY, '#c084fc', this.shockwaves, 72);
+        CombatEngine.updateSquadFormation(this.player);
+      } else if (g.kind === 'CHARGE_ADD' || g.kind === 'HAZARD' || g.kind === 'QUANTUM') {
+        const delta = g.val;
+        if (delta > 0) {
+          this.player.count = Math.min(squadCap, this.player.count + delta);
+          sfx.playGateCharge();
+          this.spawnFloatText(this.player.x, squadY - 28, `+${delta} SQUAD`, '#38bdf8');
+        } else if (delta < 0) {
+          if (this.damageSquad(Math.abs(delta), `HAZARD ${delta}!`)) return;
+        }
+        CombatEngine.updateSquadFormation(this.player);
+      }
+
+      const removeIdx = this.gates.findIndex(item => item.id === g.id);
+      if (removeIdx !== -1) this.gates.splice(removeIdx, 1);
+    }
+
+    // 6. Update Descending Crates (Unopened reward crates expire harmlessly without shrinking squad)
     for (let i = this.crates.length - 1; i >= 0; i--) {
       const c = this.crates[i];
       c.y += this.plan.scrollSpeed * 0.9 * dt;
       if (c.hitScale > 0) c.hitScale = Math.max(0, c.hitScale - dt * 6);
 
-      if (Math.abs(c.y - squadY) <= 20 && Math.abs(c.x - this.player.x) <= c.w / 2 + 12) {
+      const touchesCrate = isSplitMode
+        ? (Math.abs(c.y - squadY) <= 20 && (
+            Math.abs(c.x - (this.player.leftWingX ?? this.player.x)) <= c.w / 2 ||
+            Math.abs(c.x - (this.player.rightWingX ?? this.player.x)) <= c.w / 2
+          ))
+        : (Math.abs(c.y - squadY) <= 20 && Math.abs(c.x - this.player.x) <= c.w / 2);
+
+      if (touchesCrate) {
         this.crates.splice(i, 1);
-        if (this.damageSquad(2, 'CRATE COLLISION -2!')) return;
+        this.spawnFloatText(c.x, squadY - 26, '🔒 CRATE UNOPENED', '#94a3b8');
         continue;
       }
       if (c.y > this.ch + 50) this.crates.splice(i, 1);
@@ -869,6 +888,7 @@ export class GameLoop {
       // Brisk entry onto screen, then active tactical advance
       const entryBoost = e.y < 35 ? 1.35 : 1.0;
       e.y += e.speed * cryoMult * entryBoost * dt;
+      CombatEngine.keepEnemiesBehindBarriers([e], this.gates, this.crates, squadY);
 
       // Defensive Perimeter Breach Check
       if (e.y + e.r >= squadY - 4) {

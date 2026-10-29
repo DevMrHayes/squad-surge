@@ -553,6 +553,49 @@ export class CombatEngine {
     });
   }
 
+  public static keepEnemiesBehindBarriers(
+    enemies: Enemy[],
+    gates: Gate[],
+    crates: Crate[],
+    squadY: number
+  ): void {
+    enemies.forEach(e => {
+      if (!e.active) return;
+
+      // Prevent enemies behind active uncleared gates from phasing into/underneath the gate box
+      for (const g of gates) {
+        if (g.y >= squadY - 12) continue;
+        const isClearedPassThrough =
+          (g.kind === 'HAZARD' && g.val >= 0) ||
+          ((g.kind === 'CHARGE_ADD' || g.kind === 'QUANTUM') && g.val >= g.maxVal) ||
+          ((g.kind === 'LOCKED_MULT' || g.kind === 'BUFF_GATE') && g.unlocked) ||
+          (g.kind === 'ALTAR' && (g.altarSacrificeCost ?? 0) <= 0);
+
+        if (isClearedPassThrough) continue;
+
+        const inGateLane = Math.abs(e.x - g.x) <= g.w / 2 + e.r - 4;
+        if (inGateLane && e.y <= g.y + g.h / 2) {
+          const maxAllowedY = g.y - g.h / 2 - e.r - 18;
+          if (e.y > maxAllowedY) {
+            e.y = maxAllowedY;
+          }
+        }
+      }
+
+      // Prevent enemies behind active Armory Crates from phasing into/underneath the crate box
+      for (const c of crates) {
+        if (c.y >= squadY - 12 || c.hp <= 0) continue;
+        const inCrateLane = Math.abs(e.x - c.x) <= c.w / 2 + e.r - 4;
+        if (inCrateLane && e.y <= c.y + c.h / 2) {
+          const maxAllowedY = c.y - c.h / 2 - e.r - 18;
+          if (e.y > maxAllowedY) {
+            e.y = maxAllowedY;
+          }
+        }
+      }
+    });
+  }
+
   public static handleGateAndCrateHits(
     gates: Gate[],
     crates: Crate[],
