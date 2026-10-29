@@ -696,8 +696,9 @@ export class WaveGenerator {
     cw: number, 
     scrollSpeed: number
   ): Enemy {
-    const margin = 32;
-    const x = margin + eDef.xNorm * (cw - margin * 2);
+    const margin = 52;
+    const safeNorm = Math.max(0.02, Math.min(0.98, eDef.xNorm));
+    const x = margin + safeNorm * (cw - margin * 2);
     let r = 14;
     let color = '#f43f5e';
     let armored = false;

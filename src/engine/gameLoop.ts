@@ -74,6 +74,7 @@ export class GameLoop {
   public sessionScore: number = 0;
   public targetX: number = 190;
   public isDragging: boolean = false;
+  public dualThumbBannerTimer: number = 0;
 
   private lastTS: number = 0;
   private animFrameId: number | null = null;
@@ -362,8 +363,8 @@ export class GameLoop {
       oh = 76;
     } else if (oDef.type === 'BEAM_SPLITTER') {
       ox = this.cw / 2;
-      ow = 54;
-      oh = 54;
+      ow = 42;
+      oh = 42;
     }
 
     this.obstacles.push({
@@ -403,6 +404,7 @@ export class GameLoop {
       this.spawnFloatText(x, y - 24, '🔥 FIRE RATE +35%!', color);
     } else if (boostType === 'SPLIT_SQUAD') {
       this.player.buffs.splitSquadTimer = 10.0;
+      this.dualThumbBannerTimer = 2.8; // Trigger prominent "Dual thumb has split" banner!
       const spreadOffset = Math.min(84, this.cw * 0.22);
       this.player.leftWingX = Math.max(34, this.player.x - spreadOffset);
       this.player.rightWingX = Math.min(this.cw - 34, this.player.x + spreadOffset);
@@ -576,8 +578,10 @@ export class GameLoop {
     if (this.player.buffs.rapidTimer > 0) this.player.buffs.rapidTimer -= dt;
     if (this.player.buffs.blastTimer > 0) this.player.buffs.blastTimer -= dt;
     if (this.player.buffs.splitSquadTimer > 0) this.player.buffs.splitSquadTimer -= dt;
+    if (this.dualThumbBannerTimer > 0) this.dualThumbBannerTimer -= dt;
 
-    const squadY = this.ch * 0.78;
+    // Reposition squad to ch * 0.69 to provide generous ~215px thumb navigation zone below the crew
+    const squadY = this.ch * 0.69;
     this.player.y = squadY;
 
     // 1. Smooth squad movement toward targetX or dual wings
@@ -636,8 +640,8 @@ export class GameLoop {
 
     CombatEngine.handleObstacleInteractions(this.player, this.obstacles, this.bullets, dt, this.particles);
 
-    // Prevent enemies from phasing through diamond beam splitters or wall ricochet prisms
-    CombatEngine.handleEnemyObstacleCollisions(this.enemies, this.obstacles, this.cw);
+    // Prevent enemies from phasing or getting stuck: bounce them into open lanes
+    CombatEngine.handleEnemyObstacleCollisions(this.enemies, this.obstacles, this.cw, dt);
 
     CombatEngine.handleGateAndCrateHits(
       this.gates, 
@@ -809,23 +813,25 @@ export class GameLoop {
       if (e.slowTimer > 0) e.slowTimer -= dt;
       const cryoMult = e.slowTimer > 0 ? 0.55 : 1.0;
 
-      // Boss & Unit Tactical Lateral Movement (Never static)
+      // Boss & Unit Tactical Lateral Movement (Strictly clamped within playable highway road)
       if (e.isBoss) {
         e.bossPhase += dt * 1.6;
         e.x += Math.sin(e.bossPhase) * 38 * dt;
-        e.x = Math.max(48, Math.min(this.cw - 48, e.x));
+        e.x = Math.max(54, Math.min(this.cw - 54, e.x));
       } else if (e.type === 'RUNNER') {
         // Infantry recon units actively weave laterally while marching
         e.x += Math.sin(this.elapsed * 3.2 + (e.id % 13)) * 18 * dt;
-        e.x = Math.max(30, Math.min(this.cw - 30, e.x));
+        e.x = Math.max(50, Math.min(this.cw - 50, e.x));
       } else if (e.type === 'SPRINTER') {
         // Sprinters angle slightly toward the player's squad as they rush
         const dirToPlayer = Math.sign(this.player.x - e.x);
         e.x += dirToPlayer * 14 * dt;
-        e.x = Math.max(28, Math.min(this.cw - 28, e.x));
+        e.x = Math.max(50, Math.min(this.cw - 50, e.x));
       } else if (e.type === 'HEALER_DRONE') {
         e.x += Math.cos(this.elapsed * 2.4 + (e.id % 7)) * 22 * dt;
-        e.x = Math.max(36, Math.min(this.cw - 36, e.x));
+        e.x = Math.max(50, Math.min(this.cw - 50, e.x));
+      } else {
+        e.x = Math.max(50, Math.min(this.cw - 50, e.x));
       }
 
       // Artillery mortar shooting
@@ -988,7 +994,8 @@ export class GameLoop {
       this.bullets,
       this.particles,
       this.shockwaves,
-      this.floatTexts
+      this.floatTexts,
+      this.dualThumbBannerTimer
     );
   }
 

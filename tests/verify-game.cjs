@@ -559,102 +559,82 @@ it('Endless survival duration tracks personal best time and threat level', () =>
   assert.strictEqual(stats.highScore, 7854, 'High score updated to 7854');
 });
 
-// 24. Central Diamond Beam Splitter Refraction & +40% Overcharge
-it('Central Diamond Beam Splitter splits vertical bullets into dual 45° overcharged beams', () => {
+// 24. Central Diamond Bumper Ricochet & Overcharge
+it('Central Diamond Bumper cleanly deflects incoming bullets into lanes with +35% overcharge', () => {
   const splitter = {
     id: 101,
     type: 'BEAM_SPLITTER',
     x: 190, // Median center in 380px highway
     y: 300,
-    width: 54,
-    height: 54,
+    width: 42,
+    height: 42,
     lane: 'CENTER',
     active: true,
   };
 
-  const incomingBullet = {
+  const bulletLeft = {
     id: 1,
-    x: 190,
+    x: 184, // Left side of diamond
     y: 310,
     vx: 0,
     vy: -680,
     damage: 10,
-    gateCharge: 1.0,
+    ricochetsLeft: 2,
     isFromPlayer: true,
     active: true,
   };
 
-  const bullets = [incomingBullet];
-  const spawnedBeams = [];
+  const bulletRight = {
+    id: 2,
+    x: 196, // Right side of diamond
+    y: 310,
+    vx: 0,
+    vy: -680,
+    damage: 10,
+    ricochetsLeft: 2,
+    isFromPlayer: true,
+    active: true,
+  };
 
-  // Simulate BEAM_SPLITTER collision logic from CombatEngine
   const hw = splitter.width / 2;
   const hh = splitter.height / 2;
-  const collides = 
-    incomingBullet.x >= splitter.x - hw &&
-    incomingBullet.x <= splitter.x + hw &&
-    incomingBullet.y >= splitter.y - hh &&
-    incomingBullet.y <= splitter.y + hh &&
-    incomingBullet.vy < 0;
 
-  assert.strictEqual(collides, true, 'Bullet correctly collides with central diamond');
+  // Process left bullet
+  const bounceDirLeft = bulletLeft.x < splitter.x ? -1 : 1;
+  bulletLeft.ricochetsLeft -= 1;
+  bulletLeft.vx = bounceDirLeft * 420;
+  bulletLeft.vy = -500;
+  bulletLeft.damage *= 1.35;
+  bulletLeft.isPierce = true;
+  bulletLeft.color = '#38bdf8';
 
-  if (collides) {
-    incomingBullet.active = false; // Original bullet absorbed
-    const overchargedDmg = incomingBullet.damage * 1.4; // +40% overcharge
-    const overchargedCharge = (incomingBullet.gateCharge || 1.0) * 1.4;
+  // Process right bullet
+  const bounceDirRight = bulletRight.x < splitter.x ? -1 : 1;
+  bulletRight.ricochetsLeft -= 1;
+  bulletRight.vx = bounceDirRight * 420;
+  bulletRight.vy = -500;
+  bulletRight.damage *= 1.35;
+  bulletRight.isPierce = true;
+  bulletRight.color = '#38bdf8';
 
-    // Left outward 45° beam
-    spawnedBeams.push({
-      id: 2,
-      x: splitter.x - 10,
-      y: splitter.y - 10,
-      vx: -420,
-      vy: -420,
-      damage: overchargedDmg,
-      gateCharge: overchargedCharge,
-      radius: 4.5,
-      color: '#38bdf8',
-      isPierce: true,
-      active: true,
-    });
-
-    // Right outward 45° beam
-    spawnedBeams.push({
-      id: 3,
-      x: splitter.x + 10,
-      y: splitter.y - 10,
-      vx: 420,
-      vy: -420,
-      damage: overchargedDmg,
-      gateCharge: overchargedCharge,
-      radius: 4.5,
-      color: '#38bdf8',
-      isPierce: true,
-      active: true,
-    });
-  }
-
-  assert.strictEqual(incomingBullet.active, false, 'Incoming central bullet is absorbed by splitter');
-  assert.strictEqual(spawnedBeams.length, 2, 'Splitter creates exactly two diagonal beams');
-  assert.strictEqual(spawnedBeams[0].vx, -420, 'Left beam travels outward at 45° (vx = -420)');
-  assert.strictEqual(spawnedBeams[0].vy, -420, 'Left beam travels upward at 45° (vy = -420)');
-  assert.strictEqual(spawnedBeams[1].vx, 420, 'Right beam travels outward at 45° (vx = 420)');
-  assert.strictEqual(spawnedBeams[0].damage, 14, 'Beams carry +40% overcharge damage (10 * 1.4 = 14)');
-  assert.strictEqual(spawnedBeams[0].isPierce, true, 'Beams have piercing property to slice across rows');
-  assert.strictEqual(spawnedBeams[0].color, '#38bdf8', 'Beams carry signature holographic cyan color');
+  assert.strictEqual(bulletLeft.vx, -420, 'Bullet hitting left wedge cleanly deflects leftward');
+  assert.strictEqual(bulletRight.vx, 420, 'Bullet hitting right wedge cleanly deflects rightward');
+  assert.strictEqual(bulletLeft.damage, 13.5, 'Deflected bullet gains +35% overcharge damage');
+  assert.strictEqual(bulletLeft.isPierce, true, 'Deflected bullet has piercing property');
+  assert.strictEqual(bulletLeft.color, '#38bdf8', 'Deflected bullet carries cyan ricochet color');
 });
 
-// 25. Enemy Obstacle Bumping & Collision Constraints
-it('Enemies bump against obstacles and cannot flow through diamonds or wall mirrors', () => {
+// 25. Enemy Obstacle Bouncing & Strict Playable Road Clamp
+it('Enemies dynamically bounce off obstacles and are clamped within playable road bounds', () => {
   const cw = 380;
+  const dt = 0.016;
   const obstacles = [
-    { type: 'BEAM_SPLITTER', x: 190, y: 300, width: 54, height: 54, active: true },
+    { type: 'BEAM_SPLITTER', x: 190, y: 300, width: 42, height: 42, active: true },
     { type: 'PRISM_MIRROR', x: 54, y: 400, width: 78, height: 76, lane: 'LEFT', active: true },
     { type: 'PRISM_MIRROR', x: 326, y: 400, width: 78, height: 76, lane: 'RIGHT', active: true },
   ];
 
-  // Enemy 1: Walking straight down center highway towards diamond splitter
+  // Enemy 1: Walking down center towards diamond splitter
   const enemyCenterLeft = { id: 1, x: 185, y: 305, r: 14, speed: 80, active: true };
   const enemyCenterRight = { id: 2, x: 195, y: 305, r: 14, speed: 80, active: true };
 
@@ -675,11 +655,11 @@ it('Enemies bump against obstacles and cannot flow through diamonds or wall mirr
         const inY = Math.abs(e.y - obs.y) <= hh + e.r;
         const inX = Math.abs(e.x - obs.x) <= hw + e.r;
         if (inY && inX) {
-          if (e.x < obs.x) {
-            e.x = Math.max(30, obs.x - hw - e.r - 2);
-          } else {
-            e.x = Math.min(cw - 30, obs.x + hw + e.r + 2);
-          }
+          const bounceDir = e.x < obs.x ? -1 : 1;
+          e.x = bounceDir < 0 
+            ? Math.max(50, obs.x - hw - e.r - 8)
+            : Math.min(cw - 50, obs.x + hw + e.r + 8);
+          e.bounceVx = bounceDir * 120;
         }
       } else if (obs.type === 'PRISM_MIRROR') {
         const isLeft = obs.lane === 'LEFT' || obs.x < cw / 2;
@@ -689,34 +669,45 @@ it('Enemies bump against obstacles and cannot flow through diamonds or wall mirr
           if (isLeft) {
             const wallBumperRight = obs.x + obs.width / 2;
             if (e.x < wallBumperRight + e.r) {
-              e.x = wallBumperRight + e.r + 2;
+              e.x = wallBumperRight + e.r + 8;
+              e.bounceVx = 120;
             }
           } else {
             const wallBumperLeft = obs.x - obs.width / 2;
             if (e.x > wallBumperLeft - e.r) {
-              e.x = wallBumperLeft - e.r - 2;
+              e.x = wallBumperLeft - e.r - 8;
+              e.bounceVx = -120;
             }
           }
         }
       }
     });
+
+    // Apply bounce and strict margin clamp
+    if (e.bounceVx) e.x += e.bounceVx * dt;
+    e.x = Math.max(50, Math.min(cw - 50, e.x));
   });
 
-  // Center-left enemy bumped into left lane
-  assert.ok(enemyCenterLeft.x < 190 - 27 - 14, 'Center-left enemy clamped outside diamond into left lane');
-  assert.strictEqual(enemyCenterLeft.x, 147, 'Center-left enemy positioned cleanly in left lane');
+  // Center-left enemy bounced into left lane
+  assert.ok(enemyCenterLeft.x < 190 - 21 - 14, 'Center-left enemy bounced into left lane');
+  assert.ok(enemyCenterLeft.bounceVx < 0, 'Center-left enemy has leftward deflection velocity');
 
-  // Center-right enemy bumped into right lane
-  assert.ok(enemyCenterRight.x > 190 + 27 + 14, 'Center-right enemy clamped outside diamond into right lane');
-  assert.strictEqual(enemyCenterRight.x, 233, 'Center-right enemy positioned cleanly in right lane');
+  // Center-right enemy bounced into right lane
+  assert.ok(enemyCenterRight.x > 190 + 21 + 14, 'Center-right enemy bounced into right lane');
+  assert.ok(enemyCenterRight.bounceVx > 0, 'Center-right enemy has rightward deflection velocity');
 
-  // Left wall enemy bumped out of wall prism
-  assert.ok(enemyLeftWall.x >= 54 + 39 + 14, 'Left wall enemy clamped outside left prism');
-  assert.strictEqual(enemyLeftWall.x, 109, 'Left wall enemy slides into open lane');
+  // Left wall enemy bounced out of wall prism
+  assert.ok(enemyLeftWall.x >= 54 + 39 + 14, 'Left wall enemy bounced outside left prism');
+  assert.strictEqual(enemyLeftWall.bounceVx, 120, 'Left wall enemy given rightward bounce velocity');
 
-  // Right wall enemy bumped out of right prism
-  assert.ok(enemyRightWall.x <= 326 - 39 - 14, 'Right wall enemy clamped outside right prism');
-  assert.strictEqual(enemyRightWall.x, 271, 'Right wall enemy slides into open lane');
+  // Right wall enemy bounced out of right prism
+  assert.ok(enemyRightWall.x <= 326 - 39 - 14, 'Right wall enemy bounced outside right prism');
+  assert.strictEqual(enemyRightWall.bounceVx, -120, 'Right wall enemy given leftward bounce velocity');
+
+  // All enemies are strictly >= 50 and <= cw - 50
+  enemies.forEach(e => {
+    assert.ok(e.x >= 50 && e.x <= cw - 50, `Enemy at x=${e.x} is strictly within playable road bounds [50, 330]`);
+  });
 });
 
 // 26. Dual-Thumb Split Squad Mode Tactical Bonus

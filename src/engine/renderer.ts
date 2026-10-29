@@ -30,7 +30,8 @@ export class GameRenderer {
     bullets: Bullet[],
     particles: Particle[],
     shockwaves: Shockwave[],
-    floatTexts: FloatingText[]
+    floatTexts: FloatingText[],
+    dualThumbBannerTimer: number = 0
   ): void {
     ctx.clearRect(0, 0, cw, ch);
 
@@ -160,16 +161,13 @@ export class GameRenderer {
         ctx.restore();
       } else if (obs.type === 'BEAM_SPLITTER') {
         ctx.save();
-        const hw = (obs.width || 54) / 2;
-        const hh = (obs.height || 54) / 2;
+        const hw = (obs.width || 42) / 2;
+        const hh = (obs.height || 42) / 2;
 
-        // Outer rotating/pulsing glow diamond
-        ctx.shadowColor = '#38bdf8';
-        ctx.shadowBlur = 12;
-        ctx.fillStyle = 'rgba(15, 23, 42, 0.95)';
+        // Clean diamond bumper (matches wall prism styling, zero visual overload)
+        ctx.fillStyle = 'rgba(15, 23, 42, 0.94)';
         ctx.strokeStyle = '#38bdf8';
-        ctx.lineWidth = 2.5;
-
+        ctx.lineWidth = 2;
         ctx.beginPath();
         ctx.moveTo(obs.x, obs.y - hh);
         ctx.lineTo(obs.x + hw, obs.y);
@@ -179,38 +177,28 @@ export class GameRenderer {
         ctx.fill();
         ctx.stroke();
 
-        // Inner glowing refraction crystal (yellow gold)
+        // Bottom reflective mirror bevel face (facing player fire)
         ctx.strokeStyle = '#fde047';
-        ctx.lineWidth = 2;
+        ctx.lineWidth = 3;
         ctx.beginPath();
-        ctx.moveTo(obs.x, obs.y - hh * 0.55);
-        ctx.lineTo(obs.x + hw * 0.55, obs.y);
-        ctx.lineTo(obs.x, obs.y + hh * 0.55);
-        ctx.lineTo(obs.x - hw * 0.55, obs.y);
-        ctx.closePath();
+        ctx.moveTo(obs.x - hw, obs.y);
+        ctx.lineTo(obs.x, obs.y + hh);
+        ctx.lineTo(obs.x + hw, obs.y);
         ctx.stroke();
 
-        // Holographic outward 45° dashed refraction vectors
-        ctx.strokeStyle = 'rgba(56, 189, 248, 0.65)';
-        ctx.lineWidth = 1.5;
-        ctx.setLineDash([3, 3]);
+        // Center split line
+        ctx.strokeStyle = 'rgba(56, 189, 248, 0.4)';
+        ctx.lineWidth = 1;
         ctx.beginPath();
-        ctx.moveTo(obs.x - hw * 0.5, obs.y - hh * 0.5);
-        ctx.lineTo(obs.x - hw * 1.8, obs.y - hh * 1.8);
+        ctx.moveTo(obs.x, obs.y - hh);
+        ctx.lineTo(obs.x, obs.y + hh);
         ctx.stroke();
 
-        ctx.beginPath();
-        ctx.moveTo(obs.x + hw * 0.5, obs.y - hh * 0.5);
-        ctx.lineTo(obs.x + hw * 1.8, obs.y - hh * 1.8);
-        ctx.stroke();
-        ctx.setLineDash([]);
-
-        // Label
-        ctx.shadowBlur = 0;
+        // Crisp compact label
         ctx.fillStyle = '#38bdf8';
-        ctx.font = '900 8.5px "JetBrains Mono", monospace';
+        ctx.font = '800 8px "JetBrains Mono", monospace';
         ctx.textAlign = 'center';
-        ctx.fillText('⚡ SPLIT +40%', obs.x, obs.y - hh - 6);
+        ctx.fillText('RICOCHET', obs.x, obs.y - hh - 4);
 
         ctx.restore();
       }
@@ -259,27 +247,38 @@ export class GameRenderer {
         ctx.stroke();
 
         const hitsLeft = Math.max(0, Math.ceil(g.lockHitsRemaining));
-        const gateTitle = g.kind === 'LOCKED_MULT'
-          ? (g.unlocked ? `🔓 x${g.val} SQUAD UNLOCKED!` : `🔒 x${g.val} MULTIPLIER (${hitsLeft} HITS)`)
-          : (g.unlocked ? (g.label || 'CLAIMABLE BOOST') : `${g.label || 'LOCKED BOOST'} (${hitsLeft})`);
+        const rewardName = g.kind === 'LOCKED_MULT'
+          ? `x${g.val} SQUAD MULTIPLIER`
+          : (g.label || (g.boostType ? `${g.boostType} BOOST` : 'TACTICAL BOOST'));
+
+        const gateTitle = g.unlocked 
+          ? `🔓 CLAIM: ${rewardName}` 
+          : `🔒 ${rewardName} (${hitsLeft})`;
 
         ctx.fillStyle = g.unlocked ? '#34d399' : '#ffffff';
-        ctx.font = '900 12px Inter, sans-serif';
+        ctx.font = '900 11px Inter, sans-serif';
         ctx.textAlign = 'center';
-        ctx.fillText(gateTitle, g.x, ry + 22);
+        ctx.fillText(gateTitle, g.x, ry + 19);
 
         if (!g.unlocked) {
           const barW = w - 28;
           const barH = 5;
           const progress = Math.max(0, 1 - g.lockHitsRemaining / Math.max(1, g.lockHitsMax));
           ctx.fillStyle = '#1e293b';
-          ctx.fillRect(g.x - barW / 2, ry + 32, barW, barH);
+          ctx.fillRect(g.x - barW / 2, ry + 29, barW, barH);
           ctx.fillStyle = g.color || '#fde047';
-          ctx.fillRect(g.x - barW / 2, ry + 32, barW * progress, barH);
+          ctx.fillRect(g.x - barW / 2, ry + 29, barW * progress, barH);
+
+          ctx.fillStyle = '#94a3b8';
+          ctx.font = '800 8.5px "JetBrains Mono", monospace';
+          ctx.fillText(`SHOOT TO CHARGE (${hitsLeft} LEFT)`, g.x, ry + 42);
         } else {
+          ctx.fillStyle = '#10b981';
+          ctx.fillRect(g.x - (w - 28) / 2, ry + 27, w - 28, 4);
+
           ctx.fillStyle = '#34d399';
-          ctx.font = '900 13px "JetBrains Mono", monospace';
-          ctx.fillText('⚡ PASS THROUGH TO CLAIM', g.x, ry + 38);
+          ctx.font = '900 10.5px "JetBrains Mono", monospace';
+          ctx.fillText('⚡ PASS THROUGH TO CLAIM', g.x, ry + 41);
         }
       } else {
         // Standard Charge Add / Hazard / Quantum Gate
@@ -315,12 +314,12 @@ export class GameRenderer {
 
         // Center Value Text
         ctx.fillStyle = isMaxed ? '#34d399' : '#ffffff';
-        ctx.font = '900 19px "JetBrains Mono", monospace';
+        ctx.font = '900 18px "JetBrains Mono", monospace';
         ctx.textAlign = 'center';
         if (isHazard) {
-          ctx.fillText(isMaxed ? '0 SAFE' : `${Math.round(g.val)} HAZARD`, g.x, ry + 25);
+          ctx.fillText(isMaxed ? '0 SAFE' : `${Math.round(g.val)} HAZARD`, g.x, ry + 22);
         } else {
-          ctx.fillText(`${g.val > 0 ? '+' : ''}${Math.round(g.val)}`, g.x, ry + 25);
+          ctx.fillText(isMaxed ? `🔓 +${Math.round(g.val)} CLAIMABLE` : `${g.val > 0 ? '+' : ''}${Math.round(g.val)}`, g.x, ry + 22);
         }
 
         // Charge Progress Bar (Smoothly handles negative starts and hazards)
@@ -340,22 +339,22 @@ export class GameRenderer {
         const fillW = Math.max(0, Math.min(barW, barW * chargeRatio));
 
         ctx.fillStyle = '#0f172a';
-        ctx.fillRect(g.x - barW / 2, ry + 33, barW, barH);
+        ctx.fillRect(g.x - barW / 2, ry + 31, barW, barH);
 
         if (isMaxed) {
           ctx.fillStyle = '#10b981';
-          ctx.fillRect(g.x - barW / 2, ry + 33, barW, barH);
+          ctx.fillRect(g.x - barW / 2, ry + 31, barW, barH);
 
           ctx.fillStyle = '#34d399';
           ctx.font = '800 8.5px Inter, sans-serif';
-          ctx.fillText(isHazard ? '⚡ HAZARD NEUTRALIZED (SAFE)' : `⚡ MAX REACHED (+${g.maxVal})`, g.x, ry + 45);
+          ctx.fillText(isHazard ? '⚡ HAZARD NEUTRALIZED (SAFE)' : `⚡ CLAIM +${g.maxVal} TROOPS (READY)`, g.x, ry + 43);
         } else {
           ctx.fillStyle = isPositive ? '#38bdf8' : '#f43f5e';
-          ctx.fillRect(g.x - barW / 2, ry + 33, fillW, barH);
+          ctx.fillRect(g.x - barW / 2, ry + 31, fillW, barH);
 
           ctx.fillStyle = '#94a3b8';
           ctx.font = '700 8px Inter, sans-serif';
-          ctx.fillText(isHazard ? `SHOOT TO NEUTRALIZE (${Math.round(g.val)} -> 0)` : `MAX +${g.maxVal}`, g.x, ry + 45);
+          ctx.fillText(isHazard ? `SHOOT TO NEUTRALIZE (${Math.round(g.val)} -> 0)` : `SHOOT TO MAX (+${g.maxVal})`, g.x, ry + 43);
         }
       }
 
@@ -792,10 +791,10 @@ export class GameRenderer {
     ctx.lineTo(cw - roadMargin, squadY + 18);
     ctx.stroke();
 
-    const trackTop = squadY + 46;
-    ctx.fillStyle = 'rgba(2, 6, 23, 0.88)';
+    const trackTop = squadY + 36;
+    ctx.fillStyle = 'rgba(2, 6, 23, 0.90)';
     ctx.fillRect(roadMargin, trackTop, cw - roadMargin * 2, ch - trackTop);
-    ctx.strokeStyle = 'rgba(56, 189, 248, 0.20)';
+    ctx.strokeStyle = 'rgba(56, 189, 248, 0.22)';
     ctx.strokeRect(roadMargin, trackTop, cw - roadMargin * 2, ch - trackTop);
 
     const isSplit = (player.buffs.splitSquadTimer ?? 0) > 0;
@@ -805,7 +804,7 @@ export class GameRenderer {
     if (isSplit) {
       // Dual-Thumb Navigation Track
       ctx.fillStyle = '#38bdf8';
-      ctx.font = '900 10.5px Inter, sans-serif';
+      ctx.font = '900 11px Inter, sans-serif';
       ctx.textAlign = 'center';
       ctx.fillText('👈 LEFT THUMB', cw * 0.25, trackTop + 24);
       ctx.fillText('RIGHT THUMB 👉', cw * 0.75, trackTop + 24);
@@ -915,10 +914,10 @@ export class GameRenderer {
 
       ctx.restore();
     } else {
-      ctx.fillStyle = 'rgba(148, 163, 184, 0.4)';
-      ctx.font = '800 10px Inter, sans-serif';
+      ctx.fillStyle = 'rgba(56, 189, 248, 0.65)';
+      ctx.font = '900 10.5px Inter, sans-serif';
       ctx.textAlign = 'center';
-      ctx.fillText('⚡ SLIDE THUMB HERE TO NAVIGATE ⚡', cw / 2, trackTop + 24);
+      ctx.fillText('👇 SLIDE THUMB HERE (CREW VISIBLE ABOVE) 👇', cw / 2, trackTop + 24);
 
       // Soft Directional Ground Glow beneath Squad
       const squadSpan = Math.min(84, 24 + Math.sqrt(player.count) * 6);
@@ -996,21 +995,30 @@ export class GameRenderer {
         ctx.restore();
       });
 
-      // Floating Squad Count Badge
+      // Floating Squad Count Badge (Elevated safely above thumb touch range)
       ctx.fillStyle = '#0f172a';
       ctx.strokeStyle = '#38bdf8';
       ctx.lineWidth = 1.5;
-      const badgeW = 48;
-      const badgeH = 20;
+      const badgeW = 52;
+      const badgeH = 22;
       ctx.beginPath();
-      ctx.roundRect(player.x - badgeW / 2, player.y - 28, badgeW, badgeH, 6);
+      ctx.roundRect(player.x - badgeW / 2, player.y - 44, badgeW, badgeH, 6);
       ctx.fill();
       ctx.stroke();
 
+      // Downward pointer to squad leader
+      ctx.fillStyle = '#38bdf8';
+      ctx.beginPath();
+      ctx.moveTo(player.x - 5, player.y - 22);
+      ctx.lineTo(player.x, player.y - 16);
+      ctx.lineTo(player.x + 5, player.y - 22);
+      ctx.closePath();
+      ctx.fill();
+
       ctx.fillStyle = '#ffffff';
-      ctx.font = '900 12px "JetBrains Mono", monospace';
+      ctx.font = '900 12.5px "JetBrains Mono", monospace';
       ctx.textAlign = 'center';
-      ctx.fillText(`${player.count}`, player.x, player.y - 14);
+      ctx.fillText(`${player.count}`, player.x, player.y - 28);
     }
 
     // Squad Shield Aura
@@ -1067,6 +1075,61 @@ export class GameRenderer {
       ctx.fillText(ft.text, ft.x, ft.y);
       ctx.restore();
     });
+
+    // 15. In-Combat Head-Up Squad Counter Chip (Never covered by hands/thumbs)
+    ctx.save();
+    ctx.fillStyle = 'rgba(15, 23, 42, 0.94)';
+    ctx.strokeStyle = '#38bdf8';
+    ctx.lineWidth = 1.5;
+    const hudW = player.shields > 0 ? 128 : 94;
+    ctx.beginPath();
+    ctx.roundRect(14, 14, hudW, 26, 8);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.fillStyle = '#38bdf8';
+    ctx.font = '900 11.5px "JetBrains Mono", monospace';
+    ctx.textAlign = 'left';
+    ctx.fillText(`👥 ${player.count}`, 22, 31);
+    if (player.shields > 0) {
+      ctx.fillStyle = '#c084fc';
+      ctx.fillText(`🛡️ ${player.shields}`, 80, 31);
+    }
+    ctx.restore();
+
+    // 16. Dual-Thumb Activation Banner
+    if (dualThumbBannerTimer > 0) {
+      ctx.save();
+      const bannerAlpha = Math.min(1.0, dualThumbBannerTimer * 2.5);
+      ctx.globalAlpha = bannerAlpha;
+
+      const bannerW = Math.min(340, cw - 32);
+      const bannerH = 54;
+      const bannerY = ch * 0.20;
+      const bannerX = cw / 2 - bannerW / 2;
+
+      ctx.shadowColor = '#38bdf8';
+      ctx.shadowBlur = 14;
+      ctx.fillStyle = 'rgba(8, 14, 28, 0.96)';
+      ctx.strokeStyle = '#38bdf8';
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.roundRect(bannerX, bannerY, bannerW, bannerH, 12);
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = '#38bdf8';
+      ctx.font = '900 13px Inter, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('⚡ DUAL THUMB HAS SPLIT! ⚡', cw / 2, bannerY + 22);
+
+      ctx.fillStyle = '#e2e8f0';
+      ctx.font = '700 10.5px Inter, sans-serif';
+      ctx.fillText('Use Left & Right thumbs together to steer both wings', cw / 2, bannerY + 40);
+
+      ctx.restore();
+    }
 
     ctx.restore();
   }

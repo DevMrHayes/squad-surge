@@ -459,12 +459,15 @@ export class CombatEngine {
         });
       }
 
-      // Central Diamond Beam Splitter: Splits incoming bullets into dual outward 45° diagonal beams (+40% overcharge)
+      // Central Diamond Splitter: Clean, subtle 2-sided ricochet wedge (matches ricochet panels)
       if (obs.type === 'BEAM_SPLITTER') {
-        const hw = (obs.width || 54) / 2;
-        const hh = (obs.height || 54) / 2;
+        const hw = (obs.width || 42) / 2;
+        const hh = (obs.height || 42) / 2;
         bullets.forEach(b => {
-          if (!b.active || !b.isFromPlayer || b.vy >= 0) return;
+          if (!b.active || !b.isFromPlayer || (b.ricochetsLeft ?? 2) <= 0) return;
+          const bounceDirection = b.x < obs.x ? -1 : 1;
+          if (Math.sign(b.vx) === bounceDirection && Math.abs(b.vx) > 200) return;
+
           const collides = 
             b.x >= obs.x - hw && 
             b.x <= obs.x + hw && 
@@ -472,47 +475,17 @@ export class CombatEngine {
             b.y <= obs.y + hh;
 
           if (collides) {
-            b.active = false; // Original bullet absorbed into diamond splitter
-            const overchargedDmg = b.damage * 1.4; // +40% overcharge damage
-            const overchargedCharge = (b.gateCharge || 1.0) * 1.4;
-
-            // Spawn Left Outward 45° Diagonal Beam
-            bullets.push({
-              id: Math.random(),
-              x: obs.x - 10,
-              y: obs.y - 10,
-              vx: -420,
-              vy: -420,
-              damage: overchargedDmg,
-              gateCharge: overchargedCharge,
-              radius: 4.5,
-              color: '#38bdf8',
-              isPierce: true,
-              isFromPlayer: true,
-              ricochetsLeft: 2,
-              active: true,
-            });
-
-            // Spawn Right Outward 45° Diagonal Beam
-            bullets.push({
-              id: Math.random(),
-              x: obs.x + 10,
-              y: obs.y - 10,
-              vx: 420,
-              vy: -420,
-              damage: overchargedDmg,
-              gateCharge: overchargedCharge,
-              radius: 4.5,
-              color: '#38bdf8',
-              isPierce: true,
-              isFromPlayer: true,
-              ricochetsLeft: 2,
-              active: true,
-            });
-
+            b.ricochetsLeft = (b.ricochetsLeft ?? 2) - 1;
+            b.vx = bounceDirection * 420;
+            b.vy = -500;
+            b.damage *= 1.35; // +35% Ricochet Overcharge
+            b.radius = Math.max(3.8, b.radius);
+            b.color = '#38bdf8';
+            b.isPierce = true; // Slices cleanly through lane enemies
             if (particles) {
-              this.createExplosionParticles(obs.x, obs.y, '#38bdf8', particles, 8, true);
+              this.createExplosionParticles(b.x, b.y, '#38bdf8', particles, 2, true);
             }
+            sfx.playRicochet();
           }
         });
       }
@@ -522,7 +495,8 @@ export class CombatEngine {
   public static handleEnemyObstacleCollisions(
     enemies: Enemy[],
     obstacles: FieldObstacle[],
-    cw: number = 380
+    cw: number = 380,
+    dt: number = 0.016
   ): void {
     enemies.forEach(e => {
       if (!e.active || e.y < 20 || e.y > 800) return;
@@ -530,19 +504,19 @@ export class CombatEngine {
       obstacles.forEach(obs => {
         if (!obs.active) return;
 
-        // Central Diamond Beam Splitter collision: enemies bump against the diamond and funnel into open lanes
+        // Central Diamond Beam Splitter collision: enemies bounce cleanly into open lanes
         if (obs.type === 'BEAM_SPLITTER') {
-          const hw = (obs.width || 54) / 2;
-          const hh = (obs.height || 54) / 2;
+          const hw = (obs.width || 42) / 2;
+          const hh = (obs.height || 42) / 2;
           const inY = Math.abs(e.y - obs.y) <= hh + e.r;
           const inX = Math.abs(e.x - obs.x) <= hw + e.r;
 
           if (inY && inX) {
-            if (e.x < obs.x) {
-              e.x = Math.max(30, obs.x - hw - e.r - 2);
-            } else {
-              e.x = Math.min(cw - 30, obs.x + hw + e.r + 2);
-            }
+            const bounceDir = e.x < obs.x ? -1 : 1;
+            e.x = bounceDir < 0 
+              ? Math.max(50, obs.x - hw - e.r - 8)
+              : Math.min(cw - 50, obs.x + hw + e.r + 8);
+            (e as any).bounceVx = bounceDir * 120;
           }
         } else if (obs.type === 'PRISM_MIRROR') {
           const isLeft = obs.lane === 'LEFT' || obs.x < cw / 2 || obs.angleDeg > 0;
@@ -553,17 +527,29 @@ export class CombatEngine {
             if (isLeft) {
               const wallBumperRight = (obs.x || 54) + (obs.width || 78) / 2;
               if (e.x < wallBumperRight + e.r) {
-                e.x = wallBumperRight + e.r + 2;
+                e.x = wallBumperRight + e.r + 8;
+                (e as any).bounceVx = 120; // Deflect cleanly into right lane
               }
             } else {
               const wallBumperLeft = (obs.x || (cw - 54)) - (obs.width || 78) / 2;
               if (e.x > wallBumperLeft - e.r) {
-                e.x = wallBumperLeft - e.r - 2;
+                e.x = wallBumperLeft - e.r - 8;
+                (e as any).bounceVx = -120; // Deflect cleanly into left lane
               }
             }
           }
         }
       });
+
+      // Decay any bounce velocity
+      if ((e as any).bounceVx) {
+        e.x += (e as any).bounceVx * dt;
+        (e as any).bounceVx *= Math.max(0, 1 - dt * 8);
+        if (Math.abs((e as any).bounceVx) < 5) delete (e as any).bounceVx;
+      }
+
+      // Enforce strict road margin so enemies never hide half-off the screen
+      e.x = Math.max(50, Math.min(cw - 50, e.x));
     });
   }
 
