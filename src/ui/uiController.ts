@@ -83,13 +83,44 @@ export class UIController {
     // Render prominent commander status card
     this.updateBriefingProfileCard(profile);
 
-    // Render pre-level upgrade buttons
+    // Render pre-level upgrade buttons & power check
     this.renderUpgradeButtons();
+    this.updatePowerReadiness();
 
     // Ensure pause button is hidden during briefing (strictly zero active combat clutter)
     this.btnPause?.classList.add('hidden');
 
     this.startOverlay.classList.remove('hidden');
+  }
+
+  private getPlayerCombatPower(): number {
+    const u = storage.getSave().upgrades;
+    return (u.startSquad || 1) + (u.firepower || 1) + (u.fireRate || 1) + (u.armorPierce || 1);
+  }
+
+  private updatePowerReadiness(): void {
+    const powerText = document.getElementById('startPowerText');
+    const powerStatus = document.getElementById('startPowerStatus');
+    const powerBox = document.getElementById('startPowerCheck');
+    if (!powerText || !powerStatus || !powerBox) return;
+
+    const playerPower = this.getPlayerCombatPower();
+    const reqPower = this.game.plan.recommendedPower || 4;
+    powerText.textContent = `SQUAD POWER: ⚡ ${playerPower} / REQ: 🛡️ ${reqPower}`;
+
+    if (playerPower >= reqPower) {
+      powerStatus.textContent = '✓ COMBAT READY';
+      powerStatus.className = 'text-emerald-400 uppercase tracking-wider';
+      powerBox.className = 'flex items-center justify-between px-2.5 py-1.5 rounded-xl bg-emerald-950/30 border border-emerald-500/30 text-[10px] font-extrabold';
+    } else if (playerPower === reqPower - 1) {
+      powerStatus.textContent = '⚠️ UPGRADE ADVISED';
+      powerStatus.className = 'text-amber-400 uppercase tracking-wider';
+      powerBox.className = 'flex items-center justify-between px-2.5 py-1.5 rounded-xl bg-amber-950/30 border border-amber-500/30 text-[10px] font-extrabold';
+    } else {
+      powerStatus.textContent = '💀 FARM PREV. LEVELS';
+      powerStatus.className = 'text-rose-400 uppercase tracking-wider';
+      powerBox.className = 'flex items-center justify-between px-2.5 py-1.5 rounded-xl bg-rose-950/40 border border-rose-500/40 text-[10px] font-extrabold';
+    }
   }
 
   private renderUpgradeButtons(): void {
@@ -133,6 +164,7 @@ export class UIController {
           this.game.player.count = 5 + (storage.getSave().upgrades.startSquad - 1) * 2;
           this.game.initLevel(this.game.currentLevel);
           this.renderUpgradeButtons();
+          this.updatePowerReadiness();
           this.updateHUD(this.game.currentLevel, this.game.enemiesLeft, this.game.totalEnemiesInLevel, storage.getSave().coins);
         } else {
           sfx.playLose();
@@ -166,7 +198,13 @@ export class UIController {
     } else {
       resIcon.textContent = '💥';
       resTitle.textContent = 'MISSION FAILED';
-      resDesc.textContent = reason || 'Perimeter overrun! Defend the line!';
+      const playerPower = this.getPlayerCombatPower();
+      const reqPower = this.game.plan.recommendedPower || 4;
+      if (playerPower < reqPower) {
+        resDesc.textContent = `Gear Check! Your Squad Power (${playerPower}) is below the recommended level (${reqPower}). Buy upgrades or tap "Level ▾" to replay earlier missions for gold!`;
+      } else {
+        resDesc.textContent = reason || 'Perimeter overrun! Prioritise high-threat flankers and unlock barriers early.';
+      }
       if (resBaseReward) resBaseReward.textContent = `+0 🪙`;
       if (resSurvivalBonus) resSurvivalBonus.textContent = `+0 🪙 (0 👥)`;
       resCoins.textContent = `+${coins} 🪙`;

@@ -1,7 +1,10 @@
 {
-  "firestore": {
-    "rules": "firestore.rules"
-  },
+  "firestore": [
+    {
+      "database": "squad-surge",
+      "rules": "firestore.rules"
+    }
+  ],
   "hosting": {
     "target": "squad-surge-game",
     "public": "dist",

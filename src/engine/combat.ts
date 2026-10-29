@@ -390,7 +390,7 @@ export class CombatEngine {
 
           if (g.kind === 'LOCKED_MULT' || g.kind === 'BUFF_GATE') {
             if (!g.unlocked) {
-              g.lockHitsRemaining = Math.max(0, g.lockHitsRemaining - b.gateCharge * 3.1);
+              g.lockHitsRemaining = Math.max(0, g.lockHitsRemaining - b.gateCharge * 1.15);
               if (g.lockHitsRemaining <= 0) {
                 g.unlocked = true;
                 sfx.playGateCharge();
@@ -411,7 +411,7 @@ export class CombatEngine {
             }
           } else if (g.kind === 'CHARGE_ADD' || g.kind === 'HAZARD' || g.kind === 'QUANTUM') {
             if (g.val < g.maxVal) {
-              g.chargeHits += b.gateCharge * 2.9;
+              g.chargeHits += b.gateCharge * 1.15;
               while (g.chargeHits >= g.hitsPerStep && g.val < g.maxVal) {
                 g.chargeHits -= g.hitsPerStep;
                 g.val += 1;

@@ -477,6 +477,24 @@ export class GameLoop {
       g.y += this.plan.scrollSpeed * dt;
       if (g.hitScale > 0) g.hitScale = Math.max(0, g.hitScale - dt * 6);
 
+      // Sliding gate horizontal oscillation
+      if (g.sliding) {
+        g.x += (g.slideSpeed || 48) * (g.slideDir || 1) * dt;
+        const minX = 28 + g.w / 2;
+        const maxX = this.cw - 28 - g.w / 2;
+        if (g.x <= minX) { g.x = minX; g.slideDir = 1; }
+        if (g.x >= maxX) { g.x = maxX; g.slideDir = -1; }
+      }
+
+      // Quantum polarity flipping (Sector 5)
+      if (g.flipPolarity && g.val < g.maxVal) {
+        g.polarityTimer = (g.polarityTimer ?? 3.0) - dt;
+        if (g.polarityTimer <= 0) {
+          g.polarityTimer = 3.0;
+          g.val = -g.val || -3;
+        }
+      }
+
       // Traversal through gate
       if (Math.abs(g.y - squadY) <= 22 && Math.abs(g.x - this.player.x) <= g.w / 2 + collectHalfW * 0.4) {
         // MUTUAL EXCLUSION: If gate is paired, shatter the sibling gate in this dilemma row
@@ -587,11 +605,23 @@ export class GameLoop {
       if (e.slowTimer > 0) e.slowTimer -= dt;
       const cryoMult = e.slowTimer > 0 ? 0.55 : 1.0;
 
-      // Boss lateral swaying
+      // Boss & Unit Tactical Lateral Movement (Never static)
       if (e.isBoss) {
         e.bossPhase += dt * 1.6;
         e.x += Math.sin(e.bossPhase) * 38 * dt;
         e.x = Math.max(48, Math.min(this.cw - 48, e.x));
+      } else if (e.type === 'RUNNER') {
+        // Infantry recon units actively weave laterally while marching
+        e.x += Math.sin(this.elapsed * 3.2 + (e.id % 13)) * 18 * dt;
+        e.x = Math.max(30, Math.min(this.cw - 30, e.x));
+      } else if (e.type === 'SPRINTER') {
+        // Sprinters angle slightly toward the player's squad as they rush
+        const dirToPlayer = Math.sign(this.player.x - e.x);
+        e.x += dirToPlayer * 14 * dt;
+        e.x = Math.max(28, Math.min(this.cw - 28, e.x));
+      } else if (e.type === 'HEALER_DRONE') {
+        e.x += Math.cos(this.elapsed * 2.4 + (e.id % 7)) * 22 * dt;
+        e.x = Math.max(36, Math.min(this.cw - 36, e.x));
       }
 
       // Artillery mortar shooting
@@ -615,7 +645,9 @@ export class GameLoop {
         }
       }
 
-      e.y += e.speed * cryoMult * dt;
+      // Brisk entry onto screen, then active tactical advance
+      const entryBoost = e.y < 35 ? 1.35 : 1.0;
+      e.y += e.speed * cryoMult * entryBoost * dt;
 
       // Defensive Perimeter Breach Check
       if (e.y + e.r >= squadY - 4) {

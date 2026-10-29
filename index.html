@@ -13,7 +13,6 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;600;700;800;900&family=JetBrains+Mono:wght@700;800&display=swap" rel="stylesheet">
-  <script src="https://cdn.tailwindcss.com"></script>
   <style>
     * {
       box-sizing: border-box;
@@ -110,7 +109,11 @@
           </div>
           <h2 id="startTitle" class="text-base font-black text-white tracking-tight mb-1">MISSION 1</h2>
           <div class="text-xs font-bold text-sky-300 mb-0.5" id="startRuleTitle">Split-Lane Dilemma</div>
-          <p id="startRuleDesc" class="text-[11px] text-slate-400 leading-snug">Enemies rush the opposite lane while gates absorb your firepower. Slide carefully.</p>
+          <p id="startRuleDesc" class="text-[11px] text-slate-400 leading-snug mb-2">Enemies rush the opposite lane while gates absorb your firepower. Slide carefully.</p>
+          <div id="startPowerCheck" class="flex items-center justify-between px-2.5 py-1.5 rounded-xl bg-slate-950 border border-slate-800 text-[10px] font-extrabold">
+            <span id="startPowerText" class="text-slate-300 font-mono-num">SQUAD POWER: 4 / REQ: 4</span>
+            <span id="startPowerStatus" class="text-emerald-400 uppercase tracking-wider">✓ COMBAT READY</span>
+          </div>
         </div>
 
         <!-- Commander Cloud Status & Login Card -->

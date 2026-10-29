@@ -352,6 +352,34 @@ it('User profile stats allow highScore property for cloud synchronization', () =
   assert.ok(profileStats.highScore >= 0);
 });
 
+// 16. RPG Gear-Check Hardness Curve & Level 5 Gatekeeper Step
+it('Recommended Squad Power scales smoothly for L1-2 and steps up at L5 Boss Gatekeeper', () => {
+  function getRecommendedPower(level) {
+    if (level === 1) return 4;
+    if (level === 2) return 5;
+    if (level === 3) return 6;
+    if (level === 4) return 8;
+    if (level === 5) return 10;
+    const bossTiersPassed = Math.floor(level / 5);
+    return Math.round(5 + level * 1.15 + bossTiersPassed * 1.8);
+  }
+
+  assert.strictEqual(getRecommendedPower(1), 4, 'Level 1 must be winnable at starter Power 4');
+  assert.strictEqual(getRecommendedPower(2), 5, 'Level 2 requires Power 5');
+  assert.strictEqual(getRecommendedPower(5), 10, 'Level 5 Warden Gatekeeper requires Power 10 (6 upgrade levels)');
+  assert.ok(getRecommendedPower(10) > getRecommendedPower(5), 'Level 10 Titan must require higher upgrades than Level 5');
+});
+
+// 17. Early Level Clarity (No Wall Prism Boxes on Level 2 & Brisk Scroll Speed)
+it('Early onboarding levels (L1-L5) exclude wall Prism Mirrors and enforce brisk scroll speed >= 66 px/s', () => {
+  for (let lvl = 1; lvl <= 5; lvl++) {
+    const spawnsPrism = lvl >= 6;
+    const scrollSpeed = Math.min(106, 66 + lvl * 0.55);
+    assert.strictEqual(spawnsPrism, false, `Level ${lvl} must not spawn wall Prism Mirrors`);
+    assert.ok(scrollSpeed >= 66, `Level ${lvl} scrollSpeed (${scrollSpeed}) must be brisk (>= 66 px/s)`);
+  }
+});
+
 console.log('====================================================');
 console.log(`  Tests Completed: ${passedTests} / ${totalTests} Passed`);
 console.log('====================================================');

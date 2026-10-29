@@ -1,4 +1,5 @@
 // Squad Surge: Main Application Entry Point
+import './style.css';
 import { GameLoop } from './engine/gameLoop';
 import { UIController } from './ui/uiController';
 import { initAuthListener } from './config/firebase';

@@ -27,19 +27,16 @@ import {
 import { SaveData, UserAccountProfile, UserApprovalStatus } from '../types/game';
 
 // Environment-backed configuration (No hardcoded credentials)
-const detectedAuthDomain = typeof window !== 'undefined' && window.location.hostname && !window.location.hostname.includes('localhost')
-  ? (window.location.hostname.includes('web.app') ? window.location.hostname : (import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || 'shipyard-cat-game.firebaseapp.com'))
-  : (import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || 'shipyard-cat-game.firebaseapp.com');
-
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY || '',
-  authDomain: detectedAuthDomain,
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || 'shipyard-cat-game',
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || 'shipyard-cat-game.firebasestorage.app',
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || '311874067924',
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || 'storied-runs.firebaseapp.com',
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || 'storied-runs',
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || 'storied-runs.firebasestorage.app',
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || '680263310460',
   appId: import.meta.env.VITE_FIREBASE_APP_ID || '',
 };
 
+const FIRESTORE_DATABASE_ID = import.meta.env.VITE_FIRESTORE_DATABASE_ID || 'squad-surge';
 export const PRIMARY_ADMIN_EMAIL = (import.meta.env.VITE_ADMIN_EMAIL || 'hayesorhaze@gmail.com').toLowerCase();
 
 let app: any = null;
@@ -51,7 +48,7 @@ let currentProfile: UserAccountProfile | null = null;
 try {
   app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
   auth = getAuth(app);
-  db = getFirestore(app);
+  db = getFirestore(app, FIRESTORE_DATABASE_ID);
 } catch (err) {
   console.warn('[Firebase] Initialization offline fallback:', err);
 }
@@ -186,16 +183,6 @@ export async function loginWithGoogle(): Promise<UserAccountProfile | null> {
   const provider = new GoogleAuthProvider();
   provider.setCustomParameters({ prompt: 'select_account' });
 
-  const ua = typeof navigator !== 'undefined' ? navigator.userAgent || '' : '';
-  const isMobile = /Android|iPhone|iPad|iPod|IEMobile|Opera Mini|webOS/i.test(ua);
-  const isStandalone = typeof window !== 'undefined' && ((window.navigator as any).standalone || window.matchMedia?.('(display-mode: standalone)').matches);
-
-  // If on mobile browser or standalone PWA, initiate redirect flow to avoid popup blocking
-  if (isMobile || isStandalone) {
-    await signInWithRedirect(auth, provider);
-    return null; // Page will redirect to Google accounts and reload through initAuthListener
-  }
-
   try {
     const cred = await signInWithPopup(auth, provider);
     currentUser = cred.user;
@@ -203,12 +190,10 @@ export async function loginWithGoogle(): Promise<UserAccountProfile | null> {
   } catch (err: any) {
     const redirectFallbackCodes = [
       'auth/popup-blocked',
-      'auth/popup-closed-by-user',
-      'auth/cancelled-popup-request',
       'auth/operation-not-supported-in-this-environment'
     ];
     if (redirectFallbackCodes.includes(err?.code)) {
-      console.warn('[Auth] Popup blocked or cancelled; triggering redirect flow fallback...');
+      console.warn('[Auth] Popup blocked; triggering redirect flow fallback...');
       await signInWithRedirect(auth, provider);
       return null;
     }

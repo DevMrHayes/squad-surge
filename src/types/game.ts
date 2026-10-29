@@ -324,6 +324,7 @@ export interface LevelPlan {
   biome: BiomeConfig;
   archetype: MissionArchetypeConfig;
   tier: number;
+  recommendedPower: number;
   isBossLevel: boolean;
   isTitanLevel: boolean;
   scrollSpeed: number;
