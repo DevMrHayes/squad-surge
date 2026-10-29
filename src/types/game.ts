@@ -75,6 +75,7 @@ export interface Gate {
   lane: 'LEFT' | 'RIGHT' | 'CENTER';
   kind: GateKind;
   val: number;
+  minVal?: number;
   maxVal: number;
   chargeHits: number;
   hitsPerStep: number;
@@ -204,6 +205,8 @@ export interface Bullet {
   isFromPlayer: boolean;
   ricochetsLeft?: number;
   targetEnemyId?: number;
+  lastHitGateId?: number;
+  lastHitCrateId?: number;
   mortarArc?: {
     startX: number;
     startY: number;
@@ -258,6 +261,7 @@ export interface GateQueueItem {
   lane: number; // 0 = Left, 1 = Right
   kind: GateKind;
   val?: number;
+  minVal?: number;
   maxVal?: number;
   hitsPerStep?: number;
   lockHitsRemaining?: number;

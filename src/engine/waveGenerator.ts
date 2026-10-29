@@ -320,39 +320,48 @@ export class WaveGenerator {
           lane: greedLane,
           kind: 'ALTAR',
           val: 0,
+          minVal: 0,
           maxVal: 0,
-          hitsPerStep: 1,
+          hitsPerStep: 4,
           altarSacrificeCost: Math.min(18, 6 + Math.floor(level * 0.15)),
           altarWeaponReward: (w + level) % 2 === 0 ? 'laserWeapon' : 'homingMissiles',
           pairId,
         });
+        const hazVal = -(2 + Math.floor(level * 0.2));
         gateQueue.push({
           spawnTime: cursorTime,
           lane: threatLane,
           kind: 'HAZARD',
-          val: -(2 + Math.floor(level * 0.2)),
-          maxVal: 5,
-          hitsPerStep: hitsPerIncrement,
+          val: hazVal,
+          minVal: hazVal,
+          maxVal: 0,
+          hitsPerStep: Math.min(6, 4 + Math.floor(level * 0.15)),
           pairId,
         });
       } else if (isLockedMult) {
-        const lockHits = Math.min(38, Math.round(14 + level * 1.4));
+        const lockHits = Math.min(32, Math.round(12 + level * 1.1));
         gateQueue.push({
           spawnTime: cursorTime,
           lane: greedLane,
           kind: 'LOCKED_MULT',
           val: 2,
+          minVal: 0,
+          maxVal: 2,
+          label: '🔒 x2 SQUAD',
+          color: '#10b981',
           lockHitsRemaining: lockHits,
           lockHitsMax: lockHits,
           pairId,
         });
+        const hazVal = -(2 + Math.floor(level * 0.25));
         gateQueue.push({
           spawnTime: cursorTime,
           lane: threatLane,
           kind: level <= 3 ? 'CHARGE_ADD' : 'HAZARD',
-          val: level <= 3 ? 2 : -(2 + Math.floor(level * 0.25)),
-          maxVal: maxAddCap,
-          hitsPerStep: hitsPerIncrement,
+          val: level <= 3 ? 2 : hazVal,
+          minVal: level <= 3 ? 2 : hazVal,
+          maxVal: level <= 3 ? maxAddCap : 0,
+          hitsPerStep: level <= 3 ? hitsPerIncrement : Math.min(6, 4 + Math.floor(level * 0.15)),
           pairId,
         });
       } else if (isTacticalBuffGate) {
@@ -368,7 +377,7 @@ export class WaveGenerator {
                     : buffType === 'CRYO' ? '#22d3ee'
                     : buffType === 'BLAST' ? '#fb923c'
                     : '#f43f5e';
-        const lockHits = Math.min(34, Math.round(12 + level * 1.2));
+        const lockHits = Math.min(30, Math.round(10 + level * 1.0));
 
         gateQueue.push({
           spawnTime: cursorTime,
@@ -377,41 +386,48 @@ export class WaveGenerator {
           boostType: buffType,
           label,
           color,
+          minVal: 0,
+          maxVal: 1,
           lockHitsRemaining: lockHits,
           lockHitsMax: lockHits,
           pairId,
         });
+        const threatVal = level <= 2 ? 2 : -(1 + Math.floor(level * 0.18));
         gateQueue.push({
           spawnTime: cursorTime,
           lane: threatLane,
-          kind: 'CHARGE_ADD',
-          val: level <= 2 ? 2 : -(1 + Math.floor(level * 0.18)),
-          maxVal: Math.max(5, Math.floor(maxAddCap * 0.8)),
-          hitsPerStep: hitsPerIncrement,
+          kind: threatVal < 0 ? 'HAZARD' : 'CHARGE_ADD',
+          val: threatVal,
+          minVal: threatVal,
+          maxVal: threatVal < 0 ? 0 : Math.max(5, Math.floor(maxAddCap * 0.8)),
+          hitsPerStep: threatVal < 0 ? Math.min(6, 4 + Math.floor(level * 0.15)) : hitsPerIncrement,
           pairId,
         });
       } else {
-        // Chargeable Math Gates (Starts low or negative in higher levels so you must charge it!)
+        // Chargeable Math Gates (Starts positive or can be charged/neutralized)
         const startVal = level === 1 ? 2 : level === 2 ? 1 : Math.max(-4, 1 - Math.floor(level * 0.2) - w);
         const isSliding = (level >= 4 && archetype.id === 'PRECISION_GRID') || (sector >= 2 && w % 2 === 1);
         gateQueue.push({
           spawnTime: cursorTime,
           lane: greedLane,
-          kind: isQuantumWave ? 'QUANTUM' : 'CHARGE_ADD',
+          kind: isQuantumWave ? 'QUANTUM' : (startVal < 0 ? 'HAZARD' : 'CHARGE_ADD'),
           val: startVal,
-          maxVal: maxAddCap,
-          hitsPerStep: hitsPerIncrement,
+          minVal: startVal,
+          maxVal: startVal < 0 ? 0 : maxAddCap,
+          hitsPerStep: startVal < 0 ? Math.min(6, 4 + Math.floor(level * 0.15)) : hitsPerIncrement,
           sliding: isSliding,
           flipPolarity: isQuantumWave,
           pairId,
         });
+        const threatStartVal = level === 1 ? 1 : Math.max(-5, -Math.floor(level * 0.22));
         gateQueue.push({
           spawnTime: cursorTime,
           lane: threatLane,
-          kind: 'CHARGE_ADD',
-          val: level === 1 ? 1 : Math.max(-5, -Math.floor(level * 0.22)),
-          maxVal: Math.max(4, maxAddCap - 2),
-          hitsPerStep: hitsPerIncrement,
+          kind: threatStartVal < 0 ? 'HAZARD' : 'CHARGE_ADD',
+          val: threatStartVal,
+          minVal: threatStartVal,
+          maxVal: threatStartVal < 0 ? 0 : Math.max(4, maxAddCap - 2),
+          hitsPerStep: threatStartVal < 0 ? Math.min(6, 4 + Math.floor(level * 0.15)) : hitsPerIncrement,
           pairId,
         });
       }

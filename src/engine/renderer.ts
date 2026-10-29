@@ -171,27 +171,28 @@ export class GameRenderer {
       const ry = g.y - h / 2;
 
       if (g.kind === 'ALTAR') {
-        // Sacrifice Altar
-        ctx.fillStyle = 'rgba(88, 28, 135, 0.90)';
-        ctx.strokeStyle = '#c084fc';
+        // Sacrifice Altar (Can be shot to purify and reduce troop cost down to 0)
+        const isFree = (g.altarSacrificeCost ?? 0) <= 0;
+        ctx.fillStyle = isFree ? 'rgba(16, 185, 129, 0.28)' : 'rgba(88, 28, 135, 0.90)';
+        ctx.strokeStyle = isFree ? '#10b981' : '#c084fc';
         ctx.lineWidth = 2.5;
         ctx.beginPath();
         ctx.roundRect(rx, ry, w, h, 12);
         ctx.fill();
         ctx.stroke();
 
-        ctx.fillStyle = '#e9d5ff';
+        ctx.fillStyle = isFree ? '#34d399' : '#e9d5ff';
         ctx.font = '800 11px Inter, sans-serif';
         ctx.textAlign = 'center';
-        ctx.fillText('SACRIFICE ALTAR', g.x, ry + 18);
+        ctx.fillText(isFree ? '⚡ PURIFIED ASCENSION SHRINE' : '🔮 SACRIFICE ALTAR', g.x, ry + 18);
 
-        ctx.fillStyle = '#f43f5e';
+        ctx.fillStyle = isFree ? '#34d399' : '#f43f5e';
         ctx.font = '900 13px "JetBrains Mono", monospace';
-        ctx.fillText(`-${g.altarSacrificeCost || 15} SQUAD`, g.x, ry + 36);
+        ctx.fillText(isFree ? '0 SQUAD (FREE)' : `-${g.altarSacrificeCost} SQUAD`, g.x, ry + 34);
 
         ctx.fillStyle = '#fbbf24';
-        ctx.font = '700 9px Inter, sans-serif';
-        ctx.fillText(g.altarWeaponReward === 'laserWeapon' ? 'REWARD: PIERCING LASER' : 'REWARD: HOMING MISSILES', g.x, ry + 48);
+        ctx.font = '700 8.5px Inter, sans-serif';
+        ctx.fillText(g.altarWeaponReward === 'laserWeapon' ? 'REWARD: PIERCING LASER' : 'REWARD: HOMING MISSILES', g.x, ry + 46);
       } else if (g.kind === 'LOCKED_MULT' || g.kind === 'BUFF_GATE') {
         // Locked Mult or Buff Gate
         ctx.fillStyle = g.unlocked ? 'rgba(16, 185, 129, 0.25)' : 'rgba(15, 23, 42, 0.92)';
@@ -202,28 +203,35 @@ export class GameRenderer {
         ctx.fill();
         ctx.stroke();
 
+        const hitsLeft = Math.max(0, Math.ceil(g.lockHitsRemaining));
+        const gateTitle = g.kind === 'LOCKED_MULT'
+          ? (g.unlocked ? `🔓 x${g.val} SQUAD UNLOCKED!` : `🔒 x${g.val} MULTIPLIER (${hitsLeft} HITS)`)
+          : (g.unlocked ? (g.label || 'CLAIMABLE BOOST') : `${g.label || 'LOCKED BOOST'} (${hitsLeft})`);
+
         ctx.fillStyle = g.unlocked ? '#34d399' : '#ffffff';
-        ctx.font = '900 13px Inter, sans-serif';
+        ctx.font = '900 12px Inter, sans-serif';
         ctx.textAlign = 'center';
-        ctx.fillText(g.unlocked ? 'CLAIMABLE BOOST' : (g.label || 'LOCKED BOOST'), g.x, ry + 22);
+        ctx.fillText(gateTitle, g.x, ry + 22);
 
         if (!g.unlocked) {
           const barW = w - 28;
           const barH = 5;
-          const progress = Math.max(0, 1 - g.lockHitsRemaining / g.lockHitsMax);
+          const progress = Math.max(0, 1 - g.lockHitsRemaining / Math.max(1, g.lockHitsMax));
           ctx.fillStyle = '#1e293b';
           ctx.fillRect(g.x - barW / 2, ry + 32, barW, barH);
           ctx.fillStyle = g.color || '#fde047';
           ctx.fillRect(g.x - barW / 2, ry + 32, barW * progress, barH);
         } else {
           ctx.fillStyle = '#34d399';
-          ctx.font = '900 14px "JetBrains Mono", monospace';
-          ctx.fillText('UNLOCKED', g.x, ry + 38);
+          ctx.font = '900 13px "JetBrains Mono", monospace';
+          ctx.fillText('⚡ PASS THROUGH TO CLAIM', g.x, ry + 38);
         }
       } else {
         // Standard Charge Add / Hazard / Quantum Gate
+        const isHazard = g.kind === 'HAZARD';
+        const isMaxed = isHazard ? g.val >= 0 : (g.maxVal > 0 && g.val >= g.maxVal);
         const isPositive = g.val >= 0;
-        const isMaxed = g.maxVal > 0 && g.val >= g.maxVal;
+
         ctx.fillStyle = isMaxed 
           ? 'rgba(16, 185, 129, 0.28)' 
           : (isPositive ? 'rgba(14, 165, 233, 0.22)' : 'rgba(244, 63, 94, 0.22)');
@@ -236,7 +244,7 @@ export class GameRenderer {
         ctx.fill();
         ctx.stroke();
 
-        // Holographic Cyber Scanline & Corner Brackets
+        // Holographic Cyber Scanline
         ctx.save();
         ctx.beginPath();
         ctx.roundRect(rx, ry, w, h, 10);
@@ -250,39 +258,49 @@ export class GameRenderer {
         ctx.stroke();
         ctx.restore();
 
-        ctx.fillStyle = '#ffffff';
-        ctx.font = '900 20px "JetBrains Mono", monospace';
+        // Center Value Text
+        ctx.fillStyle = isMaxed ? '#34d399' : '#ffffff';
+        ctx.font = '900 19px "JetBrains Mono", monospace';
         ctx.textAlign = 'center';
-        ctx.fillText(`${g.val > 0 ? '+' : ''}${Math.round(g.val)}`, g.x, ry + 26);
+        if (isHazard) {
+          ctx.fillText(isMaxed ? '0 SAFE' : `${Math.round(g.val)} HAZARD`, g.x, ry + 25);
+        } else {
+          ctx.fillText(`${g.val > 0 ? '+' : ''}${Math.round(g.val)}`, g.x, ry + 25);
+        }
 
-        // Charge Progress Bar
-        if (g.maxVal > 0) {
-          const barW = w - 24;
-          const barH = 5;
-          // Calculate true continuous progress towards maxVal
-          const chargeRatio = isMaxed 
-            ? 1.0 
-            : Math.max(0, Math.min(1.0, (Math.max(0, g.val) + (g.chargeHits / g.hitsPerStep)) / g.maxVal));
-          const fillW = Math.max(0, Math.min(barW, barW * chargeRatio));
+        // Charge Progress Bar (Smoothly handles negative starts and hazards)
+        const barW = w - 24;
+        const barH = 5;
+        const minVal = g.minVal !== undefined ? g.minVal : (g.val < 0 ? g.val : 0);
+        const targetVal = isHazard ? 0 : g.maxVal;
+        const span = Math.max(1, targetVal - minVal);
+        let chargeRatio = 0;
+        if (isMaxed) {
+          chargeRatio = 1.0;
+        } else if (span > 0) {
+          const current = (g.val - minVal) + (g.chargeHits / Math.max(1, g.hitsPerStep));
+          chargeRatio = Math.max(0, Math.min(1.0, current / span));
+        }
 
-          ctx.fillStyle = '#0f172a';
-          ctx.fillRect(g.x - barW / 2, ry + 34, barW, barH);
+        const fillW = Math.max(0, Math.min(barW, barW * chargeRatio));
 
-          if (isMaxed) {
-            ctx.fillStyle = '#10b981';
-            ctx.fillRect(g.x - barW / 2, ry + 34, barW, barH);
+        ctx.fillStyle = '#0f172a';
+        ctx.fillRect(g.x - barW / 2, ry + 33, barW, barH);
 
-            ctx.fillStyle = '#34d399';
-            ctx.font = '800 8.5px Inter, sans-serif';
-            ctx.fillText(`⚡ MAX REACHED (+${g.maxVal})`, g.x, ry + 46);
-          } else {
-            ctx.fillStyle = isPositive ? '#38bdf8' : '#f43f5e';
-            ctx.fillRect(g.x - barW / 2, ry + 34, fillW, barH);
+        if (isMaxed) {
+          ctx.fillStyle = '#10b981';
+          ctx.fillRect(g.x - barW / 2, ry + 33, barW, barH);
 
-            ctx.fillStyle = '#94a3b8';
-            ctx.font = '700 8px Inter, sans-serif';
-            ctx.fillText(`MAX +${g.maxVal}`, g.x, ry + 46);
-          }
+          ctx.fillStyle = '#34d399';
+          ctx.font = '800 8.5px Inter, sans-serif';
+          ctx.fillText(isHazard ? '⚡ HAZARD NEUTRALIZED (SAFE)' : `⚡ MAX REACHED (+${g.maxVal})`, g.x, ry + 45);
+        } else {
+          ctx.fillStyle = isPositive ? '#38bdf8' : '#f43f5e';
+          ctx.fillRect(g.x - barW / 2, ry + 33, fillW, barH);
+
+          ctx.fillStyle = '#94a3b8';
+          ctx.font = '700 8px Inter, sans-serif';
+          ctx.fillText(isHazard ? `SHOOT TO NEUTRALIZE (${Math.round(g.val)} -> 0)` : `MAX +${g.maxVal}`, g.x, ry + 45);
         }
       }
 

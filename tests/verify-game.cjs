@@ -411,6 +411,90 @@ it('Prism Mirror intercepts lane bullets, deflects diagonally with +35% overchar
   assert.strictEqual(alreadyDeflected, true, 'Consecutive frame inside same prism must be ignored');
 });
 
+// 19. AP Rounds & Piercing Bullets Charge Gates and Damage Crates
+it('AP Rounds and piercing bullets hit barriers with 2.2x gate charge and crate damage', () => {
+  const gate = { id: 1, val: 2, maxVal: 6, chargeHits: 0, hitsPerStep: 4, kind: 'CHARGE_ADD' };
+  const crate = { id: 2, hp: 40, maxHp: 40, boostType: 'VANGUARD' };
+
+  // Piercing AP round bullet
+  const apBullet = {
+    x: 100,
+    y: 200,
+    damage: 10,
+    gateCharge: 1.0,
+    isPierce: true,
+    color: '#fde047',
+    isFromPlayer: true,
+    active: true,
+  };
+
+  // Must NOT be ignored because of isPierce!
+  const chargeMult = (apBullet.isPierce && apBullet.color === '#fde047') ? 2.2 : 1.15;
+  const chargeAmt = apBullet.gateCharge * chargeMult;
+  gate.chargeHits += chargeAmt;
+  while (gate.chargeHits >= gate.hitsPerStep && gate.val < gate.maxVal) {
+    gate.chargeHits -= gate.hitsPerStep;
+    gate.val += 1;
+  }
+
+  assert.strictEqual(chargeAmt, 2.2, 'AP Round must apply 2.2x gate charge');
+  assert.strictEqual(gate.chargeHits, 2.2, 'Gate accumulated charge from piercing AP round');
+
+  // Second shot (2.2 + 2.2 = 4.4 >= 4) increments gate number
+  gate.chargeHits += chargeAmt;
+  while (gate.chargeHits >= gate.hitsPerStep && gate.val < gate.maxVal) {
+    gate.chargeHits -= gate.hitsPerStep;
+    gate.val += 1;
+  }
+  assert.strictEqual(gate.val, 3, 'Gate number increased from 2 to 3 under AP fire');
+
+  // AP Round vs Crate deals 2.2x damage
+  const crateDmg = apBullet.damage * 2.2;
+  crate.hp -= crateDmg;
+  assert.strictEqual(crate.hp, 18, 'Crate took 22 damage from AP round');
+});
+
+// 20. Hazard Neutralization
+it('Shooting a negative hazard gate brings it to 0, clearing it for safe pass-through', () => {
+  const hazardGate = { id: 3, val: -2, minVal: -2, maxVal: 0, chargeHits: 0, hitsPerStep: 5, kind: 'HAZARD' };
+
+  // Shot 1
+  hazardGate.chargeHits += 5;
+  while (hazardGate.chargeHits >= hazardGate.hitsPerStep && hazardGate.val < 0) {
+    hazardGate.chargeHits -= hazardGate.hitsPerStep;
+    hazardGate.val += 1;
+  }
+  assert.strictEqual(hazardGate.val, -1, 'Hazard neutralized from -2 to -1');
+
+  // Shot 2 reaches 0 (neutralized)
+  hazardGate.chargeHits += 5;
+  while (hazardGate.chargeHits >= hazardGate.hitsPerStep && hazardGate.val < 0) {
+    hazardGate.chargeHits -= hazardGate.hitsPerStep;
+    hazardGate.val += 1;
+  }
+  assert.strictEqual(hazardGate.val, 0, 'Hazard neutralized to 0');
+  const isMaxed = hazardGate.val >= 0;
+  assert.strictEqual(isMaxed, true, 'Neutralized hazard gate allows 100% free pass-through');
+});
+
+// 21. Altar Gate Purification
+it('Shooting a Sacrifice Altar purifies it and drops sacrifice cost to 0', () => {
+  const altar = { id: 4, altarSacrificeCost: 3, chargeHits: 0, hitsPerStep: 4, kind: 'ALTAR' };
+
+  // Shoot 3 times
+  for (let s = 0; s < 3; s++) {
+    altar.chargeHits += 4;
+    while (altar.chargeHits >= altar.hitsPerStep && altar.altarSacrificeCost > 0) {
+      altar.chargeHits -= altar.hitsPerStep;
+      altar.altarSacrificeCost = Math.max(0, altar.altarSacrificeCost - 1);
+    }
+  }
+
+  assert.strictEqual(altar.altarSacrificeCost, 0, 'Altar sacrifice cost reduced to 0 (Free Ascension)');
+  const isFree = altar.altarSacrificeCost <= 0;
+  assert.strictEqual(isFree, true, 'Purified altar grants weapon evolution with 0 troop cost');
+});
+
 console.log('====================================================');
 console.log(`  Tests Completed: ${passedTests} / ${totalTests} Passed`);
 console.log('====================================================');

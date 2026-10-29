@@ -234,13 +234,14 @@ export class GameLoop {
       h: 50,
       lane: gDef.lane === 0 ? 'LEFT' : 'RIGHT',
       kind: gDef.kind,
-      val: gDef.val || 0,
-      maxVal: gDef.maxVal || 10,
+      val: gDef.val !== undefined ? gDef.val : 0,
+      minVal: gDef.minVal !== undefined ? gDef.minVal : (gDef.val !== undefined ? gDef.val : 0),
+      maxVal: gDef.maxVal !== undefined ? gDef.maxVal : 10,
       hitsPerStep: gDef.hitsPerStep || 10,
       chargeHits: 0,
       lockHitsRemaining: gDef.lockHitsRemaining || 0,
       lockHitsMax: gDef.lockHitsMax || 10,
-      unlocked: gDef.kind === 'CHARGE_ADD' || gDef.kind === 'HAZARD',
+      unlocked: gDef.kind === 'CHARGE_ADD' || gDef.kind === 'HAZARD' || gDef.kind === 'QUANTUM' || (gDef.kind === 'ALTAR' && (gDef.altarSacrificeCost ?? 0) <= 0),
       boostType: gDef.boostType,
       label: gDef.label,
       color: gDef.color,
@@ -522,7 +523,7 @@ export class GameLoop {
         } else if (g.kind === 'BUFF_GATE') {
           if (g.boostType) this.unlockTacticalBoost(g.boostType, g.x, g.y, g.color || '#fde047');
         } else if (g.kind === 'ALTAR') {
-          const cost = g.altarSacrificeCost || 15;
+          const cost = Math.max(0, g.altarSacrificeCost ?? 0);
           const actualDeduct = Math.min(this.player.count - 1, cost);
           this.player.count = Math.max(1, this.player.count - actualDeduct);
           save.stats.altarsUsed++;

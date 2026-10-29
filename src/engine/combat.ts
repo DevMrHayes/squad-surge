@@ -398,13 +398,17 @@ export class CombatEngine {
     shockwaves?: Shockwave[]
   ): void {
     bullets.forEach(b => {
-      if (!b.active || !b.isFromPlayer || b.isPierce) return;
+      if (!b.active || !b.isFromPlayer) return;
 
       // 1. Check Gate Hits
       for (const g of gates) {
-        // Maxed or Unlocked Gates: 100% Pass-Through (Bullets fly through to hit enemies behind)
-        const isMaxed = (g.val >= g.maxVal && (g.kind === 'CHARGE_ADD' || g.kind === 'HAZARD' || g.kind === 'QUANTUM')) ||
-                        ((g.kind === 'LOCKED_MULT' || g.kind === 'BUFF_GATE') && g.unlocked);
+        // Maxed, Unlocked, or Neutralized Gates: 100% Pass-Through (Bullets fly through to hit enemies behind)
+        const isMaxed = 
+          (g.kind === 'HAZARD' && g.val >= 0) ||
+          ((g.kind === 'CHARGE_ADD' || g.kind === 'QUANTUM') && g.val >= g.maxVal) ||
+          ((g.kind === 'LOCKED_MULT' || g.kind === 'BUFF_GATE') && g.unlocked) ||
+          (g.kind === 'ALTAR' && (g.altarSacrificeCost ?? 0) <= 0);
+
         if (isMaxed) continue;
 
         if (
@@ -412,12 +416,24 @@ export class CombatEngine {
           b.y >= g.y - g.h / 2 &&
           Math.abs(b.x - g.x) <= g.w / 2
         ) {
+          const isRailgunOrLaser = b.isLaser || (b.isPierce && b.color === '#06b6d4');
+          if (isRailgunOrLaser && b.lastHitGateId === g.id) continue;
+          if (isRailgunOrLaser) {
+            b.lastHitGateId = g.id;
+          } else {
+            b.active = false; // Barriers absorb incoming bullets until unlocked/maxed
+          }
+
           g.hitScale = 1.0;
           this.createExplosionParticles(b.x, b.y, g.color || '#38bdf8', particles, 4, true);
 
+          // AP rounds deal 2.2x barrier charge
+          const chargeMult = (b.isPierce && b.color === '#fde047') ? 2.2 : 1.15;
+          const chargeAmt = (b.gateCharge || 1.0) * chargeMult;
+
           if (g.kind === 'LOCKED_MULT' || g.kind === 'BUFF_GATE') {
             if (!g.unlocked) {
-              g.lockHitsRemaining = Math.max(0, g.lockHitsRemaining - b.gateCharge * 1.15);
+              g.lockHitsRemaining = Math.max(0, g.lockHitsRemaining - chargeAmt);
               if (g.lockHitsRemaining <= 0) {
                 g.unlocked = true;
                 sfx.playGateCharge();
@@ -425,7 +441,7 @@ export class CombatEngine {
                 if (shockwaves) this.createShockwave(g.x, g.y, '#34d399', shockwaves, 64);
                 floatTexts.push({
                   id: Math.random(),
-                  text: '🔓 UNLOCKED!',
+                  text: g.kind === 'LOCKED_MULT' ? `🔓 x${g.val} SQUAD UNLOCKED!` : '🔓 UNLOCKED!',
                   x: g.x,
                   y: g.y - 18,
                   vy: -35,
@@ -436,9 +452,58 @@ export class CombatEngine {
                 });
               }
             }
-          } else if (g.kind === 'CHARGE_ADD' || g.kind === 'HAZARD' || g.kind === 'QUANTUM') {
+          } else if (g.kind === 'ALTAR') {
+            // Shooting the Altar purifies it and reduces the troop sacrifice cost down to zero
+            g.chargeHits += chargeAmt;
+            const hitsPerReduction = g.hitsPerStep || 4;
+            while (g.chargeHits >= hitsPerReduction && (g.altarSacrificeCost ?? 0) > 0) {
+              g.chargeHits -= hitsPerReduction;
+              g.altarSacrificeCost = Math.max(0, (g.altarSacrificeCost ?? 1) - 1);
+              sfx.playGateCharge();
+              if (g.altarSacrificeCost === 0) {
+                g.unlocked = true;
+                this.createExplosionParticles(g.x, g.y, '#c084fc', particles, 16);
+                if (shockwaves) this.createShockwave(g.x, g.y, '#c084fc', shockwaves, 64);
+                floatTexts.push({
+                  id: Math.random(),
+                  text: '⚡ FREE ASCENSION (0 SQUAD)!',
+                  x: g.x,
+                  y: g.y - 18,
+                  vy: -35,
+                  color: '#c084fc',
+                  fontSize: 14,
+                  alpha: 1.0,
+                  life: 1.0,
+                });
+              }
+            }
+          } else if (g.kind === 'HAZARD') {
+            // Shooting a Hazard neutralizes it toward 0 (Safe)
+            g.chargeHits += chargeAmt;
+            const stepHits = Math.min(6, g.hitsPerStep || 5);
+            while (g.chargeHits >= stepHits && g.val < 0) {
+              g.chargeHits -= stepHits;
+              g.val += 1;
+              sfx.playGateCharge();
+              if (g.val >= 0) {
+                g.val = 0;
+                if (shockwaves) this.createShockwave(g.x, g.y, '#10b981', shockwaves, 52);
+                floatTexts.push({
+                  id: Math.random(),
+                  text: '⚡ HAZARD NEUTRALIZED (0)!',
+                  x: g.x,
+                  y: g.y - 18,
+                  vy: -35,
+                  color: '#34d399',
+                  fontSize: 14,
+                  alpha: 1.0,
+                  life: 1.0,
+                });
+              }
+            }
+          } else if (g.kind === 'CHARGE_ADD' || g.kind === 'QUANTUM') {
             if (g.val < g.maxVal) {
-              g.chargeHits += b.gateCharge * 1.15;
+              g.chargeHits += chargeAmt;
               while (g.chargeHits >= g.hitsPerStep && g.val < g.maxVal) {
                 g.chargeHits -= g.hitsPerStep;
                 g.val += 1;
@@ -466,9 +531,6 @@ export class CombatEngine {
             }
           }
 
-          // Barrier Rule: Bullets are absorbed by charging gates until the gate reaches its cap
-          // or is unlocked, allowing enemies to tactically take cover behind barriers.
-          b.active = false;
           return;
         }
       }
@@ -481,7 +543,16 @@ export class CombatEngine {
           b.y >= c.y - c.h / 2 &&
           Math.abs(b.x - c.x) <= c.w / 2
         ) {
-          c.hp -= b.damage;
+          const isRailgunOrLaser = b.isLaser || (b.isPierce && b.color === '#06b6d4');
+          if (isRailgunOrLaser && b.lastHitCrateId === c.id) continue;
+          if (isRailgunOrLaser) {
+            b.lastHitCrateId = c.id;
+          } else {
+            b.active = false;
+          }
+
+          const crateDmg = b.damage * ((b.isPierce && b.color === '#fde047') ? 2.2 : 1.0);
+          c.hp -= crateDmg;
           c.hitScale = 1.0;
           this.createExplosionParticles(b.x, b.y, c.color, particles, 4, true);
 
@@ -491,8 +562,6 @@ export class CombatEngine {
             if (shockwaves) this.createShockwave(c.x, c.y, c.color, shockwaves, 54);
             crates.splice(j, 1);
           }
-          // Bullets are absorbed by the crate until it is shattered
-          b.active = false;
           return;
         }
       }
