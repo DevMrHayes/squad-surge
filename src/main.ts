@@ -26,7 +26,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     game.resize();
   });
 
-  // Handle PWA Service Worker Registration & Live Auto-Update
+  // Handle PWA Service Worker Registration & Non-Intrusive Auto-Update
   if ('serviceWorker' in navigator) {
     try {
       const reg = await navigator.serviceWorker.register('./sw.js');
@@ -35,8 +35,13 @@ window.addEventListener('DOMContentLoaded', async () => {
         if (newWorker) {
           newWorker.addEventListener('statechange', () => {
             if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-              console.log('[PWA] New version installed! Reloading to apply updates...');
-              window.location.reload();
+              console.log('[PWA] New version installed!');
+              // Do NOT abruptly abort active gameplay; only reload if not in active combat
+              if (game.mode !== 'PLAYING') {
+                window.location.reload();
+              } else {
+                console.log('[PWA] Deferring reload until return to tactical menu.');
+              }
             }
           });
         }

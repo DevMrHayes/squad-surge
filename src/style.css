@@ -1,3 +1,77 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* ==========================================================================
+   MATERIAL DESIGN 3 (M3) UTILITIES & MOTION SPECIFICATION
+   ========================================================================== */
+
+/* M3 Surface Container Elevation Hierarchy */
+.m3-surface-container-lowest {
+  background-color: #050813;
+}
+.m3-surface-container-low {
+  background-color: #0a0f1d;
+}
+.m3-surface-container {
+  background-color: #0e1628;
+}
+.m3-surface-container-high {
+  background-color: #121c30;
+}
+.m3-surface-container-highest {
+  background-color: #1a2844;
+}
+
+/* M3 Soft Hairline Tonal Border */
+.m3-border-tonal {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+.m3-border-subtle {
+  border: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+/* M3 Tactile Tap Feedback with Ripple Curve */
+.btn-tap {
+  transition: transform 0.12s cubic-bezier(0.2, 0, 0, 1), 
+              filter 0.15s cubic-bezier(0.2, 0, 0, 1),
+              box-shadow 0.15s cubic-bezier(0.2, 0, 0, 1);
+  will-change: transform;
+}
+.btn-tap:active {
+  transform: scale(0.96);
+  filter: brightness(0.92);
+}
+
+/* Material 3 Segmented Control Active Indicator */
+.m3-segmented-active {
+  background: linear-gradient(135deg, #38bdf8 0%, #0ea5e9 100%) !important;
+  color: #030712 !important;
+  box-shadow: 0 4px 14px -2px rgba(56, 189, 248, 0.35) !important;
+}
+
+.m3-segmented-inactive {
+  background: transparent !important;
+  color: #94a3b8 !important;
+}
+.m3-segmented-inactive:hover {
+  color: #ffffff !important;
+}
+
+/* Tactile Upgrade Card Hover / Active Elevation */
+.m3-upgrade-card {
+  transition: all 0.16s cubic-bezier(0.2, 0, 0, 1);
+}
+.m3-upgrade-card:hover {
+  border-color: rgba(56, 189, 248, 0.4);
+  background-color: #15223c;
+}
+.m3-upgrade-card:active {
+  transform: scale(0.97);
+}
+
+/* Touch Target Standard Accessibility (Min 48px) */
+.min-touch-target {
+  min-height: 48px;
+  min-width: 48px;
+}

@@ -47,6 +47,7 @@ export class GameLoop {
   public endlessThreatLevel: number = 1;
   public endlessTimeSurvived: number = 0;
   private endlessNextCursorTime: number = 0;
+  private celebratedNewRecord: boolean = false;
   public plan: LevelPlan;
   public elapsed: number = 0;
   public trauma: number = 0;
@@ -158,6 +159,7 @@ export class GameLoop {
       this.currentLevel = 1;
       this.endlessThreatLevel = 1;
       this.endlessTimeSurvived = 0;
+      this.celebratedNewRecord = false;
       this.plan = WaveGenerator.generateEndlessInitialPlan(this.cw);
       this.endlessNextCursorTime = 11.15;
     } else {
@@ -471,6 +473,15 @@ export class GameLoop {
       }
       this.plan.scrollSpeed = Math.min(140, 75 + this.endlessThreatLevel * 2.2);
 
+      // In-Game Personal Best Surpassed Notification
+      const prevBest = storage.getSave().stats.endlessBestTime || 0;
+      if (prevBest >= 10 && !this.celebratedNewRecord && this.endlessTimeSurvived > prevBest) {
+        this.celebratedNewRecord = true;
+        this.spawnFloatText(this.cw / 2, this.ch * 0.35, '🏆 NEW PERSONAL BEST SURPASSED!', '#34d399');
+        sfx.playGateCharge();
+        this.trauma = Math.min(1.0, this.trauma + 0.25);
+      }
+
       // Continuous endless queue refill
       if (this.gateQueue.length < 3 || this.enemySchedule.length < 8) {
         const chunk = WaveGenerator.generateEndlessChunk(this.endlessThreatLevel, this.endlessNextCursorTime, this.cw);
@@ -748,8 +759,21 @@ export class GameLoop {
       // Defensive Perimeter Breach Check
       if (e.y + e.r >= squadY - 4) {
         if (e.isBoss) {
-          this.triggerDefeat(`${e.name || e.type} breached your defensive perimeter!`);
-          return;
+          if (this.isEndless) {
+            const bossCost = Math.max(16, Math.ceil(this.player.count * 0.5));
+            if (this.damageSquad(bossCost, `🚨 ${e.name || 'BOSS'} CLASH -${bossCost} 👥!`)) {
+              this.triggerDefeat(`${e.name || e.type} breached your highway defense line!`);
+              return;
+            }
+            // Repel / neutralize boss after heroic squad clash
+            CombatEngine.createShockwave(this.player.x, squadY, '#f43f5e', this.shockwaves, 96);
+            this.enemies.splice(i, 1);
+            this.enemiesKilled++;
+            continue;
+          } else {
+            this.triggerDefeat(`${e.name || e.type} breached your defensive perimeter!`);
+            return;
+          }
         }
 
         if (e.type === 'MINE') {

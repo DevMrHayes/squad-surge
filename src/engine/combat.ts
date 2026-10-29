@@ -580,10 +580,10 @@ export class CombatEngine {
     statsTracker: { totalKills: number; bossesDefeated: number; ricochetKills: number },
     shockwaves?: Shockwave[]
   ): void {
-    // 1. Synergy: Shield Bearer links adjacent allies
+    // 1. Synergy: Shield Bearer links adjacent allies (Bosses have dedicated armor plates and cannot be shielded)
     const shieldBearers = enemies.filter(e => e.active && e.type === 'SHIELD_BEARER');
     enemies.forEach(e => {
-      if (e.type !== 'SHIELD_BEARER') {
+      if (e.type !== 'SHIELD_BEARER' && !e.isBoss) {
         const nearBearer = shieldBearers.find(b => Math.hypot(b.x - e.x, b.y - e.y) <= 120);
         e.shielded = !!nearBearer;
         e.shieldSourceId = nearBearer?.id;

@@ -98,16 +98,16 @@ export class UIController {
     const isEndless = this.game.isEndless;
     const plan = this.game.plan;
 
-    // Update Mode Tabs Visual State
+    // Update Mode Tabs Visual State to M3 Segmented Control
     const tabCampaign = document.getElementById('tabModeCampaign');
     const tabEndless = document.getElementById('tabModeEndless');
     if (tabCampaign && tabEndless) {
       if (isEndless) {
-        tabCampaign.className = 'flex-1 py-1.5 px-2 rounded-xl text-xs font-black tracking-wide uppercase transition-all text-slate-400 hover:text-white flex items-center justify-center gap-1';
-        tabEndless.className = 'flex-1 py-1.5 px-2 rounded-xl text-xs font-black tracking-wide uppercase transition-all bg-sky-500 text-slate-950 shadow-sm flex items-center justify-center gap-1';
+        tabCampaign.className = 'flex-1 h-11 px-3 rounded-full text-xs font-bold tracking-wider uppercase transition-all duration-200 text-slate-400 hover:text-white flex items-center justify-center gap-1.5';
+        tabEndless.className = 'flex-1 h-11 px-3 rounded-full text-xs font-black tracking-wider uppercase transition-all duration-200 bg-gradient-to-r from-sky-400 to-sky-500 text-slate-950 shadow-md shadow-sky-500/20 flex items-center justify-center gap-1.5';
       } else {
-        tabCampaign.className = 'flex-1 py-1.5 px-2 rounded-xl text-xs font-black tracking-wide uppercase transition-all bg-sky-500 text-slate-950 shadow-sm flex items-center justify-center gap-1';
-        tabEndless.className = 'flex-1 py-1.5 px-2 rounded-xl text-xs font-black tracking-wide uppercase transition-all text-slate-400 hover:text-white flex items-center justify-center gap-1';
+        tabCampaign.className = 'flex-1 h-11 px-3 rounded-full text-xs font-black tracking-wider uppercase transition-all duration-200 bg-gradient-to-r from-sky-400 to-sky-500 text-slate-950 shadow-md shadow-sky-500/20 flex items-center justify-center gap-1.5';
+        tabEndless.className = 'flex-1 h-11 px-3 rounded-full text-xs font-bold tracking-wider uppercase transition-all duration-200 text-slate-400 hover:text-white flex items-center justify-center gap-1.5';
       }
     }
 
@@ -127,7 +127,7 @@ export class UIController {
       rewardEl.textContent = `BEST: ${bestTime} ⏱️`;
       titleEl.textContent = 'INFINITE HIGHWAY SURVIVAL';
       ruleTitleEl.textContent = 'Hold The Line • Dynamic Threat Escalation';
-      ruleDescEl.textContent = 'Enemies, Brutes, and Bosses scale continuously every 20 seconds. Survive as long as you can to set the high score!';
+      ruleDescEl.textContent = 'Enemies, Brutes, and Bosses scale continuously every 10 seconds. Survive as long as you can to set the high score!';
       if (deployBtn) deployBtn.innerHTML = '<span>🚀 DEPLOY SURVIVAL SQUAD</span>';
     } else {
       badgeEl.textContent = `${plan.biome.name} • ${plan.archetype.badge}`;
@@ -167,24 +167,34 @@ export class UIController {
     const powerText = document.getElementById('startPowerText');
     const powerStatus = document.getElementById('startPowerStatus');
     const powerBox = document.getElementById('startPowerCheck');
+    const meterBar = document.getElementById('startPowerMeterBar');
     if (!powerText || !powerStatus || !powerBox) return;
 
     const playerPower = this.getPlayerCombatPower();
     const reqPower = this.game.plan.recommendedPower || 4;
     powerText.textContent = `SQUAD POWER: ⚡ ${playerPower} / REQ: 🛡️ ${reqPower}`;
 
+    // Ratio for linear progress meter (capped at 100%)
+    const pct = Math.min(100, Math.round((playerPower / reqPower) * 100));
+    if (meterBar) {
+      meterBar.style.width = `${pct}%`;
+    }
+
     if (playerPower >= reqPower) {
       powerStatus.textContent = '✓ COMBAT READY';
-      powerStatus.className = 'text-emerald-400 uppercase tracking-wider';
-      powerBox.className = 'flex items-center justify-between px-2.5 py-1.5 rounded-xl bg-emerald-950/30 border border-emerald-500/30 text-[10px] font-extrabold';
+      powerStatus.className = 'text-emerald-400 uppercase tracking-wider text-[10px] font-black';
+      powerBox.className = 'flex flex-col gap-1.5 px-3 py-2.5 rounded-2xl bg-emerald-950/25 border border-emerald-500/30';
+      if (meterBar) meterBar.className = 'h-full rounded-full bg-gradient-to-r from-sky-400 to-emerald-400 transition-all duration-300';
     } else if (playerPower === reqPower - 1) {
       powerStatus.textContent = '⚠️ UPGRADE ADVISED';
-      powerStatus.className = 'text-amber-400 uppercase tracking-wider';
-      powerBox.className = 'flex items-center justify-between px-2.5 py-1.5 rounded-xl bg-amber-950/30 border border-amber-500/30 text-[10px] font-extrabold';
+      powerStatus.className = 'text-amber-400 uppercase tracking-wider text-[10px] font-black';
+      powerBox.className = 'flex flex-col gap-1.5 px-3 py-2.5 rounded-2xl bg-amber-950/25 border border-amber-500/30';
+      if (meterBar) meterBar.className = 'h-full rounded-full bg-gradient-to-r from-sky-400 to-amber-400 transition-all duration-300';
     } else {
       powerStatus.textContent = '💀 FARM PREV. LEVELS';
-      powerStatus.className = 'text-rose-400 uppercase tracking-wider';
-      powerBox.className = 'flex items-center justify-between px-2.5 py-1.5 rounded-xl bg-rose-950/40 border border-rose-500/40 text-[10px] font-extrabold';
+      powerStatus.className = 'text-rose-400 uppercase tracking-wider text-[10px] font-black';
+      powerBox.className = 'flex flex-col gap-1.5 px-3 py-2.5 rounded-2xl bg-rose-950/30 border border-rose-500/35';
+      if (meterBar) meterBar.className = 'h-full rounded-full bg-gradient-to-r from-amber-400 to-rose-400 transition-all duration-300';
     }
   }
 
@@ -206,18 +216,25 @@ export class UIController {
       const canAfford = save.coins >= cost;
 
       const btn = document.createElement('button');
-      btn.className = `btn-tap flex items-center justify-between p-2.5 rounded-xl border ${
-        canAfford ? 'bg-slate-900 border-slate-700/80 hover:border-sky-400' : 'bg-slate-900/50 border-slate-800 text-slate-500'
+      btn.className = `btn-tap m3-upgrade-card flex items-center justify-between p-2.5 rounded-2xl border min-h-[64px] ${
+        canAfford 
+          ? 'bg-[#121c30] border-white/10 shadow-sm' 
+          : 'bg-[#0a0f1d]/60 border-white/5 opacity-55'
       }`;
+
       btn.innerHTML = `
-        <div class="flex items-center gap-2">
-          <span class="text-base">${u.icon}</span>
-          <div class="text-left">
-            <div class="text-xs font-bold text-white">${u.label}</div>
-            <div class="text-[10px] text-slate-400">Lv. <span class="font-mono-num text-sky-400">${lvl}</span></div>
+        <div class="flex items-center gap-2.5 min-w-0">
+          <div class="w-9 h-9 rounded-xl bg-sky-400/10 border border-sky-400/25 flex items-center justify-center text-sm shrink-0 shadow-inner">
+            <span>${u.icon}</span>
+          </div>
+          <div class="text-left min-w-0">
+            <div class="text-xs font-black text-white truncate">${u.label}</div>
+            <div class="text-[10px] text-slate-400 font-bold">
+              Lv. <span class="font-mono-num text-sky-400 font-black">${lvl}</span>
+            </div>
           </div>
         </div>
-        <div class="px-2 py-1 rounded-md bg-slate-950 font-mono-num text-xs font-bold text-amber-300">
+        <div class="px-2.5 py-1.5 rounded-xl bg-[#060913] border border-amber-400/20 font-mono-num text-xs font-black text-amber-300 shadow-inner shrink-0">
           ${cost} 🪙
         </div>
       `;
@@ -251,12 +268,13 @@ export class UIController {
     const btnRetry = document.getElementById('btnRetry')!;
 
     if (details?.isEndless) {
-      resIcon.textContent = details.isNewRecord ? '🏆' : '☠️';
-      resTitle.textContent = details.isNewRecord ? 'NEW SURVIVAL RECORD!' : 'ENDLESS RUN COMPLETE';
+      resIcon.textContent = details.isNewRecord ? '🎖️' : '☠️';
+      resTitle.textContent = details.isNewRecord ? 'NEW PERSONAL BEST!' : 'HIGHWAY DEFENSE BREACHED';
       const timeStr = this.formatSurvivalTime(details.timeSurvived || 0);
+      const cause = reason || 'Defensive perimeter overrun';
       resDesc.textContent = details.isNewRecord 
-        ? `Sensational endurance! You achieved a new personal best of ${timeStr}!` 
-        : (reason || `You held the line for ${timeStr} on the Infinite Highway.`);
+        ? `🎉 Sensational new record: ${timeStr}! Cause of defeat: ${cause}.` 
+        : `Defeat cause: ${cause} | Final Time: ${timeStr}.`;
 
       const baseLabel = resBaseReward?.parentElement?.querySelector('span:first-child');
       const bonusLabel = resSurvivalBonus?.parentElement?.querySelector('span:first-child');

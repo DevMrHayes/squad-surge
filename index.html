@@ -54,40 +54,40 @@
 </head>
 <body class="flex items-center justify-center w-full h-full bg-slate-950">
 
-  <!-- MOBILE APP SHELL -->
-  <div id="appShell" class="relative w-full h-full max-w-[440px] flex flex-col bg-[#050814] shadow-2xl overflow-hidden border-x border-slate-800/60">
+  <!-- MOBILE APP SHELL (M3 Surface-Container-Lowest) -->
+  <div id="appShell" class="relative w-full h-full max-w-[440px] flex flex-col bg-[#050813] shadow-2xl overflow-hidden border-x border-slate-800/50">
 
-    <!-- TOP ULTRA-CLEAN HUD (Strictly zero clutter during active combat) -->
-    <header class="z-20 px-3 pt-3 pb-2 bg-slate-950/90 backdrop-blur-md border-b border-slate-800/80 flex flex-col gap-1.5 shrink-0">
-      <div class="flex items-center justify-between gap-2">
-        <!-- Level Selector Pill -->
-        <button id="btnOpenMap" class="btn-tap flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-900 border border-slate-700/80 text-xs font-extrabold text-white shadow-sm">
-          <span>Level <span id="uiLevelNum" class="text-sky-400 font-mono-num">1</span></span>
+    <!-- TOP ULTRA-CLEAN HUD (M3 Surface Elevation 1) -->
+    <header class="z-20 px-3.5 pt-3 pb-2.5 bg-[#090e1c]/90 backdrop-blur-md border-b border-white/5 flex flex-col gap-2 shrink-0">
+      <div class="flex items-center justify-between gap-2.5">
+        <!-- Level Selector Chip -->
+        <button id="btnOpenMap" class="btn-tap flex items-center gap-1.5 h-10 px-3.5 rounded-full bg-[#11192b] border border-white/10 text-xs font-black text-white shadow-sm hover:border-sky-400/40" aria-label="Select Level">
+          <span>Level <span id="uiLevelNum" class="text-sky-400 font-mono-num font-black">1</span></span>
           <span class="text-slate-400 text-[10px]">▾</span>
         </button>
 
-        <!-- Center Enemies Left Progress Bar -->
-        <div class="flex-1 px-1.5">
-          <div class="flex items-center justify-between text-[10px] font-extrabold tracking-wider uppercase mb-1">
+        <!-- Center Combat Progress (M3 Linear Indicator) -->
+        <div class="flex-1 px-1">
+          <div class="flex items-center justify-between text-[10px] font-extrabold tracking-wider uppercase mb-1.5">
             <span class="text-slate-400">Enemies Left</span>
-            <span id="uiEnemiesLeft" class="text-rose-400 font-mono-num">0</span>
+            <span id="uiEnemiesLeft" class="text-rose-400 font-mono-num font-black">0</span>
           </div>
-          <div class="w-full h-2 rounded-full bg-slate-800 overflow-hidden p-[1px]">
-            <div id="uiProgressFill" class="h-full rounded-full bg-gradient-to-r from-sky-400 to-emerald-400 transition-all duration-150" style="width: 0%"></div>
+          <div class="w-full h-2 rounded-full bg-[#111a2d] overflow-hidden p-[1px]">
+            <div id="uiProgressFill" class="h-full rounded-full bg-gradient-to-r from-sky-400 via-sky-300 to-emerald-400 transition-all duration-200" style="width: 0%"></div>
           </div>
         </div>
 
-        <!-- Gold Pill, Account & Pause -->
+        <!-- Gold Currency & Account Strip -->
         <div class="flex items-center gap-1.5">
-          <div class="flex items-center gap-1 px-2.5 py-1.5 rounded-full bg-slate-900 border border-amber-500/30 text-xs font-extrabold text-amber-300 font-mono-num">
+          <div class="flex items-center gap-1 h-10 px-3 rounded-full bg-[#11192b] border border-amber-500/30 text-xs font-black text-amber-300 font-mono-num shadow-sm">
             <span>🪙</span>
             <span id="uiCoins">150</span>
           </div>
-          <button id="btnAccountHeader" class="btn-tap flex items-center gap-1 px-2.5 py-1.5 rounded-full bg-slate-900 border border-sky-400/40 text-xs font-extrabold text-sky-300">
+          <button id="btnAccountHeader" class="btn-tap flex items-center gap-1.5 h-10 px-3 rounded-full bg-[#11192b] border border-sky-400/30 text-xs font-black text-sky-300 shadow-sm" aria-label="Commander Account">
             <span id="headerAccountIcon">👤</span>
             <span id="headerAccountLabel" class="max-w-[70px] truncate">Sign In</span>
           </button>
-          <button id="btnPause" class="btn-tap hidden px-2.5 py-1.5 rounded-full bg-slate-900 border border-slate-700/80 flex items-center justify-center gap-1 text-xs text-slate-300" title="Pause Tactical Mission" aria-label="Pause Tactical Mission">
+          <button id="btnPause" class="btn-tap hidden h-10 px-3 rounded-full bg-[#11192b] border border-white/10 flex items-center justify-center gap-1 text-xs text-slate-300" title="Pause Tactical Mission" aria-label="Pause Tactical Mission">
             <span>⏸</span>
             <span class="text-[10px] font-bold hidden sm:inline">PAUSE</span>
           </button>
@@ -99,118 +99,148 @@
     <div id="canvasWrap" class="relative flex-1 w-full h-full overflow-hidden">
       <canvas id="gameCanvas" class="block w-full h-full"></canvas>
 
-      <!-- PRE-LEVEL BRIEFING OVERLAY (Disappears immediately when combat starts) -->
-      <div id="startOverlay" class="absolute inset-0 z-10 flex flex-col justify-between p-3.5 bg-slate-950/80 backdrop-blur-[4px]">
-        <!-- Game Mode Segmented Switcher -->
-        <div class="flex items-center gap-1.5 p-1 bg-slate-900/95 border border-slate-800 rounded-2xl mb-1 shrink-0 shadow-md">
-          <button id="tabModeCampaign" class="flex-1 py-1.5 px-2 rounded-xl text-xs font-black tracking-wide uppercase transition-all bg-sky-500 text-slate-950 shadow-sm flex items-center justify-center gap-1">
+      <!-- PRE-LEVEL BRIEFING OVERLAY (M3 Modal Surface) -->
+      <div id="startOverlay" class="absolute inset-0 z-10 flex flex-col justify-between p-4 bg-[#050813]/85 backdrop-blur-[6px] overflow-y-auto">
+        
+        <!-- 1. M3 Segmented Mode Switcher (Campaign vs Endless) -->
+        <div class="flex items-center p-1 bg-[#0a0f1d] border border-white/10 rounded-full shrink-0 shadow-lg mb-2">
+          <button id="tabModeCampaign" class="flex-1 h-11 px-3 rounded-full text-xs font-black tracking-wider uppercase transition-all duration-200 bg-gradient-to-r from-sky-400 to-sky-500 text-slate-950 shadow-md shadow-sky-500/20 flex items-center justify-center gap-1.5">
             <span>🛡️</span>
             <span>Campaign</span>
           </button>
-          <button id="tabModeEndless" class="flex-1 py-1.5 px-2 rounded-xl text-xs font-black tracking-wide uppercase transition-all text-slate-400 hover:text-white flex items-center justify-center gap-1">
+          <button id="tabModeEndless" class="flex-1 h-11 px-3 rounded-full text-xs font-black tracking-wider uppercase transition-all duration-200 text-slate-400 hover:text-white flex items-center justify-center gap-1.5">
             <span>♾️</span>
             <span>Endless Survival</span>
           </button>
         </div>
 
-        <!-- Top Mission Intelligence Card -->
-        <div class="bg-slate-900/95 border border-slate-800 rounded-2xl p-3.5 shadow-xl">
-          <div class="flex items-center justify-between mb-1.5">
-            <span id="startBadge" class="px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-sky-500/20 text-sky-300 border border-sky-400/30">Sector 1</span>
-            <span id="startReward" class="text-xs font-extrabold text-amber-300 font-mono-num">+64 🪙</span>
+        <!-- 2. Mission Intelligence & Squad Readiness Hero Card -->
+        <div class="bg-[#0e1628]/95 border border-white/10 rounded-[24px] p-4 shadow-xl flex flex-col gap-2.5">
+          <div class="flex items-center justify-between">
+            <span id="startBadge" class="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-sky-400/10 text-sky-300 border border-sky-400/30">
+              Sector 1 • Vanguard
+            </span>
+            <span id="startReward" class="px-2.5 py-1 rounded-full bg-amber-400/10 border border-amber-400/20 text-xs font-black text-amber-300 font-mono-num">
+              +64 🪙
+            </span>
           </div>
-          <h2 id="startTitle" class="text-base font-black text-white tracking-tight mb-1">MISSION 1</h2>
-          <div class="text-xs font-bold text-sky-300 mb-0.5" id="startRuleTitle">Split-Lane Dilemma</div>
-          <p id="startRuleDesc" class="text-[11px] text-slate-400 leading-snug mb-2">Enemies rush the opposite lane while gates absorb your firepower. Slide carefully.</p>
-          <div id="startPowerCheck" class="flex items-center justify-between px-2.5 py-1.5 rounded-xl bg-slate-950 border border-slate-800 text-[10px] font-extrabold">
-            <span id="startPowerText" class="text-slate-300 font-mono-num">SQUAD POWER: 4 / REQ: 4</span>
-            <span id="startPowerStatus" class="text-emerald-400 uppercase tracking-wider">✓ COMBAT READY</span>
+
+          <div>
+            <h2 id="startTitle" class="text-lg font-black text-white tracking-tight">MISSION 1</h2>
+            <div id="startRuleTitle" class="text-xs font-extrabold text-sky-300 mt-0.5">Split-Lane Dilemma</div>
+            <p id="startRuleDesc" class="text-[11px] text-slate-400 leading-relaxed mt-1">Enemies rush the opposite lane while gates absorb your firepower. Slide carefully.</p>
+          </div>
+
+          <!-- M3 Linear Progress Readiness Meter -->
+          <div id="startPowerCheck" class="flex flex-col gap-1.5 px-3 py-2.5 rounded-2xl bg-[#070b14] border border-white/5">
+            <div class="flex items-center justify-between text-[11px] font-black">
+              <span id="startPowerText" class="text-slate-300 font-mono-num">SQUAD POWER: ⚡ 4 / REQ: 🛡️ 4</span>
+              <span id="startPowerStatus" class="text-emerald-400 uppercase tracking-wider">✓ COMBAT READY</span>
+            </div>
+            <!-- Dynamic Linear Progress Bar -->
+            <div class="w-full h-1.5 rounded-full bg-slate-800/80 overflow-hidden">
+              <div id="startPowerMeterBar" class="h-full rounded-full bg-gradient-to-r from-sky-400 to-emerald-400 transition-all duration-300" style="width: 100%"></div>
+            </div>
           </div>
         </div>
 
-        <!-- Commander Cloud Status & Login Card -->
-        <div id="briefingProfileCard" class="bg-slate-900/95 border border-slate-800 rounded-2xl p-2.5 flex items-center justify-between shadow-md my-1">
+        <!-- 3. Commander Cloud Status Strip -->
+        <div id="briefingProfileCard" class="bg-[#0a0f1d]/90 border border-white/5 rounded-2xl p-2.5 flex items-center justify-between shadow-md my-1.5">
           <div class="flex items-center gap-2.5 min-w-0">
-            <div id="briefingAvatar" class="w-8 h-8 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-sm shrink-0">
+            <div id="briefingAvatar" class="w-9 h-9 rounded-full bg-slate-800/90 border border-slate-700/60 flex items-center justify-center text-sm shrink-0 shadow-inner">
               👤
             </div>
             <div class="flex flex-col min-w-0">
               <div class="flex items-center gap-1.5">
                 <span id="briefingCommanderName" class="text-xs font-black text-white truncate">Guest Commander</span>
-                <span id="briefingStatusPill" class="px-1.5 py-0.5 rounded-full text-[9px] font-extrabold uppercase tracking-wide bg-slate-800 text-slate-400 border border-slate-700">Offline</span>
+                <span id="briefingStatusPill" class="px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase tracking-wide bg-slate-800 text-slate-400 border border-slate-700">Offline</span>
               </div>
-              <div id="briefingCommanderEmail" class="text-[10px] text-amber-400/90 truncate">Tap to Sign In & sync stats</div>
+              <div id="briefingCommanderEmail" class="text-[10px] text-amber-400/90 truncate mt-0.5">⚠️ Progress saved locally only</div>
             </div>
           </div>
           <div class="flex items-center gap-1.5 shrink-0" id="briefingBtnContainer">
-            <button id="btnBriefingAction" class="btn-tap px-3 py-1.5 rounded-xl bg-gradient-to-r from-sky-400 to-sky-500 text-slate-950 font-black text-[11px] uppercase shadow-sm">
+            <button id="btnBriefingAction" class="btn-tap min-h-[44px] px-3.5 rounded-xl bg-gradient-to-r from-sky-400 to-sky-500 text-slate-950 font-black text-xs uppercase shadow-sm">
               Sign In
             </button>
           </div>
         </div>
 
-        <!-- Pre-Combat Upgrades Panel -->
-        <div class="my-auto py-2">
-          <div class="text-[11px] font-extrabold text-slate-400 uppercase tracking-wider mb-2 px-1">Tactical Division Upgrades</div>
-          <div id="startUpgrades" class="grid grid-cols-2 gap-2"></div>
+        <!-- 4. Tactical Division Upgrades (M3 2x2 Grid) -->
+        <div class="my-auto py-1">
+          <div class="flex items-center justify-between px-1 mb-2">
+            <span class="text-[11px] font-black text-slate-400 uppercase tracking-wider">Tactical Upgrades</span>
+            <span class="text-[10px] text-slate-500 font-bold">Tap icon to upgrade</span>
+          </div>
+          <div id="startUpgrades" class="grid grid-cols-2 gap-2.5">
+            <!-- Dynamically populated with M3 upgrade cards -->
+          </div>
         </div>
 
-        <!-- Bottom Action Button -->
-        <button id="btnTapToStart" class="btn-tap w-full py-4 rounded-2xl bg-gradient-to-r from-sky-400 to-sky-500 text-slate-950 font-black text-base tracking-wider uppercase shadow-lg shadow-sky-500/25 flex items-center justify-center gap-2">
-          <span>🚀 DEPLOY SQUAD</span>
-        </button>
+        <!-- 5. Prominent Primary Action Button (M3 Extended Pill FAB) -->
+        <div class="pt-2">
+          <button id="btnTapToStart" class="btn-tap w-full h-14 rounded-full bg-gradient-to-r from-sky-400 via-sky-500 to-indigo-500 text-slate-950 font-black text-base tracking-wider uppercase shadow-xl shadow-sky-500/25 flex items-center justify-center gap-2">
+            <span>🚀</span>
+            <span>DEPLOY SQUAD</span>
+          </button>
+        </div>
+
       </div>
 
-      <!-- PAUSE MODAL -->
-      <div id="pauseModal" class="hidden absolute inset-0 z-30 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md">
-        <div class="w-full max-w-[320px] bg-slate-900 border border-slate-800 rounded-2xl p-5 flex flex-col gap-3 shadow-2xl">
-          <h3 class="text-base font-black text-white text-center">TACTICAL PAUSE</h3>
-          <button id="btnResume" class="btn-tap w-full py-3 rounded-xl bg-sky-400 text-slate-950 font-extrabold text-sm uppercase">Resume Mission</button>
-          <button id="btnRestartPause" class="btn-tap w-full py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-slate-200 font-bold text-xs uppercase">Restart Level</button>
-          <button id="btnToggleSound" class="btn-tap w-full py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-slate-300 font-bold text-xs">🔊 Sound: ON</button>
+      <!-- PAUSE MODAL (M3 Dialog) -->
+      <div id="pauseModal" class="hidden absolute inset-0 z-30 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md">
+        <div class="w-full max-w-[320px] bg-[#0e1628] border border-white/10 rounded-[28px] p-6 flex flex-col gap-3.5 shadow-2xl">
+          <div class="text-center">
+            <div class="text-2xl mb-1">⏸️</div>
+            <h3 class="text-base font-black text-white tracking-wide">TACTICAL PAUSE</h3>
+          </div>
+          <button id="btnResume" class="btn-tap w-full h-12 rounded-full bg-sky-400 text-slate-950 font-black text-sm uppercase shadow-md shadow-sky-400/20">Resume Mission</button>
+          <button id="btnRestartPause" class="btn-tap w-full h-11 rounded-full bg-slate-800/80 border border-slate-700 text-slate-200 font-bold text-xs uppercase">Restart Level</button>
+          <button id="btnToggleSound" class="btn-tap w-full h-11 rounded-full bg-slate-800/80 border border-slate-700 text-slate-300 font-bold text-xs">🔊 Sound: ON</button>
         </div>
       </div>
 
-      <!-- RESULT MODAL -->
-      <div id="resultModal" class="hidden absolute inset-0 z-30 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md">
-        <div class="w-full max-w-[340px] bg-slate-900 border border-slate-800 rounded-3xl p-6 flex flex-col items-center text-center shadow-2xl">
+      <!-- RESULT MODAL (M3 Dialog) -->
+      <div id="resultModal" class="hidden absolute inset-0 z-30 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md">
+        <div class="w-full max-w-[340px] bg-[#0e1628] border border-white/10 rounded-[28px] p-6 flex flex-col items-center text-center shadow-2xl">
           <div id="resIcon" class="text-4xl mb-2">🏆</div>
           <h3 id="resTitle" class="text-lg font-black text-white tracking-tight mb-1">SECTOR SECURED</h3>
-          <p id="resDesc" class="text-xs text-slate-400 mb-3 leading-relaxed">Excellent tactical command!</p>
-          <div class="w-full p-3 rounded-2xl bg-slate-950 border border-slate-800 flex flex-col gap-1 mb-4 text-xs font-mono-num">
+          <p id="resDesc" class="text-xs text-slate-400 mb-4 leading-relaxed">Excellent tactical command!</p>
+          
+          <div class="w-full p-3.5 rounded-2xl bg-[#060913] border border-white/5 flex flex-col gap-1.5 mb-4 text-xs font-mono-num">
             <div class="flex justify-between text-slate-400 text-[11px]">
               <span>Base Clearance:</span>
-              <span id="resBaseReward" class="text-white">+50 🪙</span>
+              <span id="resBaseReward" class="text-white font-bold">+50 🪙</span>
             </div>
             <div class="flex justify-between text-slate-400 text-[11px]">
               <span>Squad Survival Bonus:</span>
-              <span id="resSurvivalBonus" class="text-emerald-400">+24 🪙</span>
+              <span id="resSurvivalBonus" class="text-emerald-400 font-bold">+24 🪙</span>
             </div>
-            <div class="h-[1px] bg-slate-800 my-0.5"></div>
+            <div class="h-[1px] bg-slate-800/80 my-1"></div>
             <div class="flex justify-between font-black text-amber-300 text-sm">
               <span>Total Mission Yield:</span>
               <span id="resCoins">+74 🪙</span>
             </div>
           </div>
-          <div class="w-full flex gap-2">
-            <button id="btnRetry" class="btn-tap flex-1 py-3 rounded-xl bg-slate-800 border border-slate-700 text-white font-extrabold text-xs uppercase">Retry</button>
-            <button id="btnNext" class="btn-tap flex-1 py-3 rounded-xl bg-sky-400 text-slate-950 font-extrabold text-xs uppercase">Next Level ▸</button>
+
+          <div class="w-full flex gap-2.5">
+            <button id="btnRetry" class="btn-tap flex-1 h-12 rounded-full bg-slate-800/80 border border-slate-700 text-white font-black text-xs uppercase">Retry</button>
+            <button id="btnNext" class="btn-tap flex-1 h-12 rounded-full bg-gradient-to-r from-sky-400 to-sky-500 text-slate-950 font-black text-xs uppercase shadow-md shadow-sky-400/20">Next Level ▸</button>
           </div>
         </div>
       </div>
 
-      <!-- 1-100 CAMPAIGN MAP MODAL -->
-      <div id="mapModal" class="hidden absolute inset-0 z-40 flex flex-col p-4 bg-slate-950/95 backdrop-blur-md">
-        <div class="flex items-center justify-between pb-3 border-b border-slate-800 shrink-0">
+      <!-- 1-100 CAMPAIGN MAP MODAL (M3 Fullscreen Dialog) -->
+      <div id="mapModal" class="hidden absolute inset-0 z-40 flex flex-col p-4 bg-[#050813]/95 backdrop-blur-md">
+        <div class="flex items-center justify-between pb-3 border-b border-white/10 shrink-0">
           <div>
             <h3 class="text-sm font-black text-white">TACTICAL CAMPAIGN MAP</h3>
             <div class="text-[10px] text-slate-400">100 Levels across 5 Sector Biomes</div>
           </div>
-          <button id="btnCloseMap" class="btn-tap w-8 h-8 rounded-full bg-slate-900 border border-slate-800 text-slate-300 text-xs">✕</button>
+          <button id="btnCloseMap" class="btn-tap w-10 h-10 rounded-full bg-slate-800/80 border border-slate-700 text-slate-300 text-sm flex items-center justify-center" aria-label="Close Map">✕</button>
         </div>
         <div class="flex-1 overflow-y-auto py-3">
           <div class="pb-3">
-            <button id="btnLaunchEndlessFromMap" class="btn-tap w-full py-2.5 rounded-xl bg-gradient-to-r from-sky-400 to-indigo-500 text-slate-950 font-black text-xs uppercase flex items-center justify-center gap-1.5 shadow-md shadow-sky-400/20">
+            <button id="btnLaunchEndlessFromMap" class="btn-tap w-full h-12 rounded-2xl bg-gradient-to-r from-sky-400 to-indigo-500 text-slate-950 font-black text-xs uppercase flex items-center justify-center gap-2 shadow-md shadow-sky-400/20">
               <span>♾️</span>
               <span>Launch Endless Survival Mode</span>
             </button>
@@ -219,72 +249,72 @@
         </div>
       </div>
 
-      <!-- CLOUD PROFILE & ACHIEVEMENTS MODAL -->
-      <div id="profileModal" class="hidden absolute inset-0 z-40 flex flex-col p-4 bg-slate-950/95 backdrop-blur-md">
-        <div class="flex items-center justify-between pb-3 border-b border-slate-800 shrink-0">
+      <!-- CLOUD PROFILE & ACHIEVEMENTS MODAL (M3 Fullscreen Dialog) -->
+      <div id="profileModal" class="hidden absolute inset-0 z-40 flex flex-col p-4 bg-[#050813]/95 backdrop-blur-md">
+        <div class="flex items-center justify-between pb-3 border-b border-white/10 shrink-0">
           <div>
             <h3 class="text-sm font-black text-white" id="profileName">Commander Profile</h3>
             <div class="text-[10px] text-slate-400" id="cloudStatus">🟢 Cloud Sync Ready</div>
           </div>
-          <button id="btnCloseProfile" class="btn-tap w-8 h-8 rounded-full bg-slate-900 border border-slate-800 text-slate-300 text-xs">✕</button>
+          <button id="btnCloseProfile" class="btn-tap w-10 h-10 rounded-full bg-slate-800/80 border border-slate-700 text-slate-300 text-sm flex items-center justify-center" aria-label="Close Profile">✕</button>
         </div>
 
         <div class="flex-1 overflow-y-auto py-3 space-y-3">
           <!-- Cloud Account Info & Login -->
-          <div id="accountCard" class="p-3.5 rounded-2xl bg-slate-900 border border-slate-800 space-y-2.5">
+          <div id="accountCard" class="p-4 rounded-2xl bg-[#0e1628] border border-white/10 space-y-3">
             <div class="flex items-center justify-between">
               <div>
-                <div class="text-xs font-bold text-white" id="userAccountLabel">Commander Account</div>
-                <div class="text-[10px] text-slate-400" id="userEmailLabel">Not signed in</div>
+                <div class="text-xs font-black text-white" id="userAccountLabel">Commander Account</div>
+                <div class="text-[11px] text-slate-400" id="userEmailLabel">Not signed in</div>
               </div>
-              <span id="userStatusBadge" class="px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-slate-800 text-slate-400 border border-slate-700">Offline</span>
+              <span id="userStatusBadge" class="px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-slate-800 text-slate-400 border border-slate-700">Offline</span>
             </div>
             <div class="flex gap-2">
-              <button id="btnOpenAuth" class="btn-tap flex-1 py-2 rounded-xl bg-sky-500 text-slate-950 font-extrabold text-xs">
+              <button id="btnOpenAuth" class="btn-tap flex-1 h-11 rounded-xl bg-sky-400 text-slate-950 font-black text-xs uppercase">
                 Account Sign In / Register
               </button>
-              <button id="btnLogout" class="hidden btn-tap px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 text-slate-300 font-bold text-xs">
+              <button id="btnLogout" class="hidden btn-tap h-11 px-4 rounded-xl bg-slate-800 border border-slate-700 text-slate-300 font-bold text-xs uppercase">
                 Log Out
               </button>
             </div>
           </div>
 
-          <!-- Admin Panel Button (Exclusive to hayesorhaze@gmail.com) -->
-          <button id="btnOpenAdmin" class="hidden btn-tap w-full py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 font-black text-xs uppercase flex items-center justify-center gap-1.5 shadow-lg shadow-amber-500/20">
+          <!-- Admin Panel Button -->
+          <button id="btnOpenAdmin" class="hidden btn-tap w-full h-12 rounded-2xl bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 font-black text-xs uppercase flex items-center justify-center gap-2 shadow-lg shadow-amber-500/20">
             <span>👑 Chief Admin Approval Control</span>
           </button>
 
           <!-- Career Stats Grid -->
-          <div class="grid grid-cols-2 gap-2">
-            <div class="p-2.5 rounded-xl bg-slate-900 border border-slate-800">
-              <div class="text-[10px] font-bold text-slate-400">HIGH SCORE</div>
-              <div id="statHighScore" class="text-base font-black font-mono-num text-amber-400">0</div>
+          <div class="grid grid-cols-2 gap-2.5">
+            <div class="p-3 rounded-2xl bg-[#0e1628] border border-white/5">
+              <div class="text-[10px] font-extrabold text-slate-400 uppercase">High Score</div>
+              <div id="statHighScore" class="text-lg font-black font-mono-num text-amber-400 mt-0.5">0</div>
             </div>
-            <div class="p-2.5 rounded-xl bg-slate-900 border border-slate-800">
-              <div class="text-[10px] font-bold text-slate-400">ENEMIES PURGED</div>
-              <div id="statKills" class="text-base font-black font-mono-num text-sky-400">0</div>
+            <div class="p-3 rounded-2xl bg-[#0e1628] border border-white/5">
+              <div class="text-[10px] font-extrabold text-slate-400 uppercase">Enemies Purged</div>
+              <div id="statKills" class="text-lg font-black font-mono-num text-sky-400 mt-0.5">0</div>
             </div>
-            <div class="p-2.5 rounded-xl bg-slate-900 border border-slate-800">
-              <div class="text-[10px] font-bold text-slate-400">BOSSES TOPPLED</div>
-              <div id="statBosses" class="text-base font-black font-mono-num text-rose-400">0</div>
+            <div class="p-3 rounded-2xl bg-[#0e1628] border border-white/5">
+              <div class="text-[10px] font-extrabold text-slate-400 uppercase">Bosses Toppled</div>
+              <div id="statBosses" class="text-lg font-black font-mono-num text-rose-400 mt-0.5">0</div>
             </div>
-            <div class="p-2.5 rounded-xl bg-slate-900 border border-slate-800">
-              <div class="text-[10px] font-bold text-slate-400">ALTARS CONVERTED</div>
-              <div id="statAltars" class="text-base font-black font-mono-num text-purple-400">0</div>
+            <div class="p-3 rounded-2xl bg-[#0e1628] border border-white/5">
+              <div class="text-[10px] font-extrabold text-slate-400 uppercase">Altars Converted</div>
+              <div id="statAltars" class="text-lg font-black font-mono-num text-purple-400 mt-0.5">0</div>
             </div>
-            <div class="p-2.5 rounded-xl bg-slate-900 border border-slate-800">
-              <div class="text-[10px] font-bold text-slate-400">RICOCHET KILLS</div>
-              <div id="statRicochet" class="text-base font-black font-mono-num text-amber-400">0</div>
+            <div class="p-3 rounded-2xl bg-[#0e1628] border border-white/5">
+              <div class="text-[10px] font-extrabold text-slate-400 uppercase">Ricochet Kills</div>
+              <div id="statRicochet" class="text-lg font-black font-mono-num text-amber-400 mt-0.5">0</div>
             </div>
-            <div class="p-2.5 rounded-xl bg-slate-900 border border-slate-800">
-              <div class="text-[10px] font-bold text-slate-400">BEST SURVIVAL</div>
-              <div id="statEndlessTime" class="text-base font-black font-mono-num text-emerald-400">00:00.0</div>
+            <div class="p-3 rounded-2xl bg-[#0e1628] border border-white/5">
+              <div class="text-[10px] font-extrabold text-slate-400 uppercase">Best Survival</div>
+              <div id="statEndlessTime" class="text-lg font-black font-mono-num text-emerald-400 mt-0.5">00:00.0</div>
             </div>
           </div>
 
           <!-- Achievements Catalog -->
           <div>
-            <div class="text-[11px] font-extrabold text-slate-400 uppercase tracking-wider mb-2">Campaign Achievements</div>
+            <div class="text-[11px] font-black text-slate-400 uppercase tracking-wider mb-2 px-1">Campaign Achievements</div>
             <div id="achievementsList" class="space-y-2"></div>
           </div>
 
@@ -298,38 +328,38 @@
         </div>
       </div>
 
-      <!-- AUTHENTICATION MODAL -->
-      <div id="authModal" class="hidden absolute inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/90 backdrop-blur-md">
-        <div class="w-full max-w-[340px] bg-slate-900 border border-slate-800 rounded-3xl p-5 flex flex-col gap-3 shadow-2xl">
-          <div class="flex items-center justify-between pb-1 border-b border-slate-800">
+      <!-- AUTHENTICATION MODAL (M3 Dialog) -->
+      <div id="authModal" class="hidden absolute inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md">
+        <div class="w-full max-w-[340px] bg-[#0e1628] border border-white/10 rounded-[28px] p-6 flex flex-col gap-3 shadow-2xl">
+          <div class="flex items-center justify-between pb-1 border-b border-white/5">
             <div>
               <h3 class="text-sm font-black text-white" id="authTitle">COMMANDER SIGN IN</h3>
               <div class="text-[10px] text-slate-400">Save campaign stats & progression</div>
             </div>
-            <button id="btnCloseAuth" class="btn-tap w-7 h-7 rounded-full bg-slate-800 text-slate-300 text-xs">✕</button>
+            <button id="btnCloseAuth" class="btn-tap w-8 h-8 rounded-full bg-slate-800/80 text-slate-300 text-xs flex items-center justify-center">✕</button>
           </div>
 
-          <!-- Google Auth Button -->
-          <button id="btnAuthGoogle" class="btn-tap w-full py-2.5 rounded-xl bg-white text-slate-900 font-extrabold text-xs flex items-center justify-center gap-2 shadow-sm hover:bg-slate-100">
+          <!-- Google Auth Button (M3 Tonal White Button) -->
+          <button id="btnAuthGoogle" class="btn-tap w-full h-12 rounded-xl bg-white text-slate-900 font-black text-xs flex items-center justify-center gap-2 shadow-sm hover:bg-slate-100">
             <span>🌐 Continue with Google</span>
           </button>
 
           <!-- Guest Mode Quick Play -->
-          <button id="btnPlayAsGuest" type="button" class="btn-tap w-full py-2 rounded-xl bg-slate-800 border border-slate-700 text-slate-300 font-bold text-xs flex items-center justify-center gap-1.5 hover:bg-slate-750">
+          <button id="btnPlayAsGuest" type="button" class="btn-tap w-full h-11 rounded-xl bg-slate-800/80 border border-slate-700 text-slate-200 font-bold text-xs flex items-center justify-center gap-1.5">
             <span>🎮 Continue as Guest (Offline Saves)</span>
           </button>
 
           <div class="flex items-center gap-2 my-0.5">
             <div class="flex-1 h-[1px] bg-slate-800"></div>
-            <span class="text-[10px] font-bold text-slate-500 uppercase">Or Email</span>
+            <span class="text-[10px] font-black text-slate-500 uppercase">Or Email</span>
             <div class="flex-1 h-[1px] bg-slate-800"></div>
           </div>
 
           <!-- Email / Password Form -->
-          <form id="authForm" class="flex flex-col gap-2">
-            <input id="authEmail" type="email" placeholder="Commander Email" required class="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-sky-500" />
-            <input id="authPassword" type="password" placeholder="Password (min 6 chars)" required minlength="6" class="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-sky-500" />
-            <button id="btnAuthSubmit" type="submit" class="btn-tap w-full py-2.5 rounded-xl bg-sky-500 text-slate-950 font-black text-xs uppercase shadow-md shadow-sky-500/20 mt-1">
+          <form id="authForm" class="flex flex-col gap-2.5">
+            <input id="authEmail" type="email" placeholder="Commander Email" required class="w-full h-11 px-3.5 rounded-xl bg-[#060913] border border-white/10 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-sky-400" />
+            <input id="authPassword" type="password" placeholder="Password (min 6 chars)" required minlength="6" class="w-full h-11 px-3.5 rounded-xl bg-[#060913] border border-white/10 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-sky-400" />
+            <button id="btnAuthSubmit" type="submit" class="btn-tap w-full h-12 rounded-xl bg-sky-400 text-slate-950 font-black text-xs uppercase shadow-md shadow-sky-400/20 mt-1">
               Sign In
             </button>
           </form>
@@ -340,41 +370,41 @@
             </button>
           </div>
 
-          <div id="authError" class="hidden p-2 rounded-lg bg-rose-500/20 border border-rose-500/40 text-[10px] text-rose-300 text-center font-bold"></div>
+          <div id="authError" class="hidden p-2.5 rounded-xl bg-rose-500/15 border border-rose-500/30 text-[10px] text-rose-300 text-center font-bold"></div>
 
-          <div class="p-2 rounded-xl bg-slate-950 border border-slate-800 text-[10px] text-slate-400 leading-tight">
-            🛡️ <span class="text-slate-300 font-bold">Admin Whitelist Notice:</span> All new accounts require approval by administrator (<span class="text-sky-300">hayesorhaze@gmail.com</span>) before combat access is granted.
+          <div class="p-2.5 rounded-xl bg-[#060913] border border-white/5 text-[10px] text-slate-400 leading-tight">
+            🛡️ <span class="text-slate-300 font-bold">Admin Notice:</span> New accounts require whitelist activation by admin (<span class="text-sky-300">hayesorhaze@gmail.com</span>) before combat deployment.
           </div>
         </div>
       </div>
 
-      <!-- PENDING APPROVAL MODAL -->
-      <div id="pendingModal" class="hidden absolute inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/95 backdrop-blur-md">
-        <div class="w-full max-w-[340px] bg-slate-900 border border-amber-500/40 rounded-3xl p-6 flex flex-col items-center text-center shadow-2xl">
-          <div class="w-14 h-14 rounded-full bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-2xl mb-3">
+      <!-- PENDING APPROVAL MODAL (M3 Alert Dialog) -->
+      <div id="pendingModal" class="hidden absolute inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/90 backdrop-blur-md">
+        <div class="w-full max-w-[340px] bg-[#0e1628] border border-amber-500/40 rounded-[28px] p-6 flex flex-col items-center text-center shadow-2xl">
+          <div class="w-14 h-14 rounded-full bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-2xl mb-3 shadow-inner">
             ⏳
           </div>
           <h3 class="text-base font-black text-white tracking-tight mb-1">ACCOUNT PENDING APPROVAL</h3>
           <p class="text-xs text-slate-300 mb-2">
             Your commander account (<span id="pendingUserEmail" class="text-amber-300 font-bold"></span>) has been registered.
           </p>
-          <div class="p-3 rounded-xl bg-slate-950 border border-slate-800 text-[11px] text-slate-400 leading-relaxed mb-4 text-left">
+          <div class="p-3 rounded-2xl bg-[#060913] border border-white/5 text-[11px] text-slate-400 leading-relaxed mb-4 text-left">
             Administrator (<span class="text-sky-400 font-bold">hayesorhaze@gmail.com</span>) must approve your account before you can deploy squads onto the highway.
           </div>
           <div class="w-full flex flex-col gap-2">
-            <button id="btnCheckApproval" class="btn-tap w-full py-3 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 font-extrabold text-xs uppercase shadow-md shadow-amber-500/20">
+            <button id="btnCheckApproval" class="btn-tap w-full h-12 rounded-full bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 font-black text-xs uppercase shadow-md shadow-amber-500/20">
               🔄 Check Approval Status
             </button>
-            <button id="btnPendingLogout" class="btn-tap w-full py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-slate-300 font-bold text-xs">
+            <button id="btnPendingLogout" class="btn-tap w-full h-11 rounded-full bg-slate-800/80 border border-slate-700 text-slate-300 font-bold text-xs uppercase">
               Log Out / Switch Account
             </button>
           </div>
         </div>
       </div>
 
-      <!-- ADMIN APPROVAL PANEL MODAL (Exclusive for hayesorhaze@gmail.com) -->
-      <div id="adminModal" class="hidden absolute inset-0 z-50 flex flex-col p-4 bg-slate-950/95 backdrop-blur-md">
-        <div class="flex items-center justify-between pb-3 border-b border-slate-800 shrink-0">
+      <!-- ADMIN APPROVAL PANEL MODAL (M3 Fullscreen Dialog) -->
+      <div id="adminModal" class="hidden absolute inset-0 z-50 flex flex-col p-4 bg-[#050813]/95 backdrop-blur-md">
+        <div class="flex items-center justify-between pb-3 border-b border-white/10 shrink-0">
           <div>
             <div class="flex items-center gap-1.5">
               <span class="text-amber-400 text-xs">👑</span>
@@ -382,12 +412,12 @@
             </div>
             <div class="text-[10px] text-slate-400">hayesorhaze@gmail.com</div>
           </div>
-          <button id="btnCloseAdmin" class="btn-tap w-8 h-8 rounded-full bg-slate-900 border border-slate-800 text-slate-300 text-xs">✕</button>
+          <button id="btnCloseAdmin" class="btn-tap w-10 h-10 rounded-full bg-slate-800/80 border border-slate-700 text-slate-300 text-xs flex items-center justify-center">✕</button>
         </div>
 
-        <div class="flex items-center justify-between py-2 border-b border-slate-800 text-[11px] font-bold">
+        <div class="flex items-center justify-between py-2 border-b border-white/5 text-[11px] font-bold">
           <span class="text-slate-400" id="adminQueueCount">Loading player queue...</span>
-          <button id="btnRefreshAdmin" class="btn-tap px-2.5 py-1 rounded-lg bg-slate-800 border border-slate-700 text-sky-400 text-[10px]">
+          <button id="btnRefreshAdmin" class="btn-tap px-3 py-1.5 rounded-full bg-slate-800 border border-slate-700 text-sky-400 text-[10px] font-bold">
             🔄 Refresh
           </button>
         </div>
