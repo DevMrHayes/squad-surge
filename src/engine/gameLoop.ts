@@ -326,31 +326,36 @@ export class GameLoop {
     this.sessionScore += 250;
     this.spawnFloatText(x, y - 48, '+10 🪙 CRATE BONUS', '#fbbf24');
     this.notifyHUD();
+    const duration = this.isEndless ? 5.0 : 8.0;
     if (boostType === 'AP') {
-      this.player.buffs.apTimer = 7.5;
+      this.player.buffs.apTimer = duration;
       this.spawnFloatText(x, y - 24, '⚡ AP ROUNDS (2.5x vs 🛡️)!', color);
     } else if (boostType === 'CRYO') {
-      this.player.buffs.cryoTimer = 8.0;
+      this.player.buffs.cryoTimer = duration;
       this.spawnFloatText(x, y - 24, '❄️ CRYO SLOW ACTIVE!', color);
     } else if (boostType === 'BLAST') {
-      this.player.buffs.blastTimer = 7.5;
+      this.player.buffs.blastTimer = duration;
       this.spawnFloatText(x, y - 24, '💥 BLAST SPLASH AoE!', color);
     } else if (boostType === 'FIRERATE') {
-      this.player.buffs.rapidTimer = 8.0;
+      this.player.buffs.rapidTimer = duration;
       this.spawnFloatText(x, y - 24, '🔥 FIRE RATE +35%!', color);
     } else if (boostType === 'SHIELD') {
-      this.player.shields += 2;
-      this.spawnFloatText(x, y - 24, '🛡️ +2 SQUAD SHIELDS!', color);
+      const shieldAdd = this.isEndless ? 1 : 2;
+      this.player.shields = Math.min(this.isEndless ? 2 : 5, this.player.shields + shieldAdd);
+      this.spawnFloatText(x, y - 24, `🛡️ +${shieldAdd} SQUAD SHIELDS!`, color);
     } else if (boostType === 'SNIPER') {
-      this.player.specialists.sniper += 2;
-      this.spawnFloatText(x, y - 24, '💎 +2 SNIPER SPECS!', '#06b6d4');
+      const specAdd = this.isEndless ? 1 : 2;
+      this.player.specialists.sniper = Math.min(this.isEndless ? 2 : 10, this.player.specialists.sniper + specAdd);
+      this.spawnFloatText(x, y - 24, `💎 +${specAdd} SNIPER SPECS!`, '#06b6d4');
       CombatEngine.updateSquadFormation(this.player);
     } else if (boostType === 'VANGUARD') {
-      this.player.specialists.vanguard += 2;
-      this.spawnFloatText(x, y - 24, '⚡ +2 VANGUARD SPECS!', '#f97316');
+      const specAdd = this.isEndless ? 1 : 2;
+      this.player.specialists.vanguard = Math.min(this.isEndless ? 2 : 10, this.player.specialists.vanguard + specAdd);
+      this.spawnFloatText(x, y - 24, `⚡ +${specAdd} VANGUARD SPECS!`, '#f97316');
       CombatEngine.updateSquadFormation(this.player);
     } else if (boostType === 'MORTAR') {
-      this.player.specialists.mortar += 1;
+      const specAdd = 1;
+      this.player.specialists.mortar = Math.min(this.isEndless ? 1 : 5, this.player.specialists.mortar + specAdd);
       this.spawnFloatText(x, y - 24, '🟡 +1 EMP MORTAR SPEC!', '#eab308');
       CombatEngine.updateSquadFormation(this.player);
     }
@@ -450,16 +455,21 @@ export class GameLoop {
 
     if (this.isEndless) {
       this.endlessTimeSurvived += dt;
-      const targetThreat = Math.floor(this.endlessTimeSurvived / 20) + 1;
+      // Threat increases every 10 seconds:
+      // ~60s = Threat 7 (Midway)
+      // ~120s (2m) = Threat 13 ("Good if you make it")
+      // ~180s (3m) = Threat 19 ("Great if you make it")
+      // ~300s (5m) = Threat 31 ("Incredible if you make it")
+      const targetThreat = Math.floor(this.endlessTimeSurvived / 10) + 1;
       if (targetThreat > this.endlessThreatLevel) {
         this.endlessThreatLevel = targetThreat;
-        const sId = Math.min(5, Math.ceil(targetThreat / 4)) as SectorId;
+        const sId = Math.min(5, Math.ceil(targetThreat / 6)) as SectorId;
         this.plan.biome = SECTOR_BIOMES[sId];
         this.spawnFloatText(this.cw / 2, this.ch * 0.28, `⚡ THREAT LEVEL ${targetThreat}!`, '#fde047');
         sfx.playGateCharge();
         this.trauma = Math.min(1.0, this.trauma + 0.35);
       }
-      this.plan.scrollSpeed = Math.min(115, 74 + this.endlessThreatLevel * 0.7);
+      this.plan.scrollSpeed = Math.min(140, 75 + this.endlessThreatLevel * 2.2);
 
       // Continuous endless queue refill
       if (this.gateQueue.length < 3 || this.enemySchedule.length < 8) {
@@ -588,18 +598,23 @@ export class GameLoop {
             }
           }
         }
+        const squadCap = this.isEndless ? 40 : 220;
         if ((g.kind === 'LOCKED_MULT' || g.kind === 'BUFF_GATE') && !g.unlocked) {
           this.spawnFloatText(this.player.x, squadY - 28, '🔒 LOCKED GATE (NO EFFECT)', '#94a3b8');
         } else if (g.kind === 'LOCKED_MULT') {
-          const added = Math.min(40, Math.round(this.player.count * (g.val - 1)));
-          this.player.count = Math.min(220, this.player.count + added);
+          const added = this.isEndless
+            ? Math.min(3, Math.max(1, g.val))
+            : Math.min(40, Math.round(this.player.count * (g.val - 1)));
+          this.player.count = Math.min(squadCap, this.player.count + added);
           sfx.playGateCharge();
           CombatEngine.updateSquadFormation(this.player);
-          this.spawnFloatText(this.player.x, squadY - 28, `x${g.val} SQUAD!`, '#34d399');
+          this.spawnFloatText(this.player.x, squadY - 28, this.isEndless ? `+${added} SQUAD` : `x${g.val} SQUAD!`, '#34d399');
         } else if (g.kind === 'BUFF_GATE') {
           if (g.boostType) this.unlockTacticalBoost(g.boostType, g.x, g.y, g.color || '#fde047');
         } else if (g.kind === 'ALTAR') {
-          const cost = Math.max(0, g.altarSacrificeCost ?? 0);
+          const cost = this.isEndless
+            ? Math.max(5, Math.ceil(this.player.count * 0.35))
+            : Math.max(0, g.altarSacrificeCost ?? 0);
           const actualDeduct = Math.min(this.player.count - 1, cost);
           this.player.count = Math.max(1, this.player.count - actualDeduct);
           save.stats.altarsUsed++;
@@ -616,7 +631,7 @@ export class GameLoop {
         } else if (g.kind === 'CHARGE_ADD' || g.kind === 'HAZARD' || g.kind === 'QUANTUM') {
           const delta = g.val;
           if (delta > 0) {
-            this.player.count = Math.min(220, this.player.count + delta);
+            this.player.count = Math.min(squadCap, this.player.count + delta);
             sfx.playGateCharge();
             this.spawnFloatText(this.player.x, squadY - 28, `+${delta} SQUAD`, '#38bdf8');
           } else if (delta < 0) {
@@ -707,19 +722,21 @@ export class GameLoop {
       if (e.type === 'SHOOTER' || e.isBoss) {
         e.shootCooldown -= dt;
         if (e.shootCooldown <= 0 && e.y > 40 && e.y < squadY - 120) {
-          e.shootCooldown = e.type === 'TITAN' ? 1.75 : e.type === 'SHOOTER' ? 2.5 : 2.1;
+          e.shootCooldown = this.isEndless
+            ? (e.type === 'TITAN' ? 1.4 : e.type === 'SHOOTER' ? 1.7 : 1.9)
+            : (e.type === 'TITAN' ? 1.75 : e.type === 'SHOOTER' ? 2.5 : 2.1);
           const targetX = this.player.x;
           const dx = targetX - e.x;
           const dy = squadY - e.y;
           const dist = Math.hypot(dx, dy) || 1;
-          const spd = 215;
+          const spd = this.isEndless ? 250 : 215;
           this.enemyMortars.push({
             x: e.x,
             y: e.y + e.r,
             targetX,
             vx: (dx / dist) * spd * 0.68,
             vy: spd,
-            squadLoss: e.type === 'TITAN' ? 4 : 2,
+            squadLoss: this.isEndless ? (e.type === 'TITAN' ? 6 : 3) : (e.type === 'TITAN' ? 4 : 2),
           });
         }
       }
@@ -745,7 +762,9 @@ export class GameLoop {
           continue;
         }
 
-        const soldierCost = Math.max(2, Math.ceil(e.hp / (14 + save.upgrades.firepower * 3)));
+        const soldierCost = this.isEndless
+          ? Math.max(3, Math.ceil(e.hp / (10 + save.upgrades.firepower * 1.5)))
+          : Math.max(2, Math.ceil(e.hp / (14 + save.upgrades.firepower * 3)));
         if (this.player.count > soldierCost) {
           if (this.damageSquad(soldierCost, `BREACH CLASH -${soldierCost} 👥!`)) return;
           this.enemies.splice(i, 1);

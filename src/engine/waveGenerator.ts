@@ -805,39 +805,45 @@ export class WaveGenerator {
     const enemySchedule: EnemyScheduleItem[] = [];
     const obstacleQueue: ObstacleQueueItem[] = [];
 
-    const baseEnemyHP = Math.round(16 + Math.pow(threatLevel, 1.28) * 3.6);
-    const maxAddCap = Math.min(32, 6 + Math.floor(threatLevel * 0.5));
-    const hitsPerIncrement = Math.min(18, 5 + Math.floor(threatLevel * 0.35));
+    // Aggressive HP scaling calibrated for:
+    // 2 min (~120s, threat 13) = Good (~300 HP base)
+    // 3 min (~180s, threat 19) = Great (~550 HP base)
+    // 5 min (~300s, threat 31) = Incredible (~1,150 HP base)
+    const baseEnemyHP = Math.round(28 + Math.pow(threatLevel, 1.55) * 5.5);
+    const maxAddCap = Math.min(4, 2 + Math.floor(threatLevel * 0.1));
+    const hitsPerIncrement = Math.min(20, 8 + Math.floor(threatLevel * 0.5));
     const greedLane = (threatLevel + Math.floor(startTime)) % 2;
     const threatLane = 1 - greedLane;
     const pairId = Math.floor(startTime * 1000) + threatLevel;
 
-    // 1. Choice Gate Dilemma
+    // 1. Choice Gate Dilemma (Endless mode grants controlled +1..+3 recruits, NEVER 2x compounding!)
     const waveVariant = threatLevel % 4;
     if (waveVariant === 0) {
-      // Locked Multiplier vs Charge Add
-      const lockHits = Math.min(36, Math.round(10 + threatLevel * 1.1));
+      // Locked Reinforcement Gate (+1 to +3) vs Hazard
+      const lockHits = Math.min(42, Math.round(14 + threatLevel * 1.5));
+      const recruitBonus = Math.min(3, 1 + Math.floor(threatLevel * 0.1));
       gateQueue.push({
         spawnTime: startTime,
         lane: greedLane,
         kind: 'LOCKED_MULT',
-        val: 2,
+        val: recruitBonus,
         minVal: 0,
-        maxVal: 2,
-        label: '🔒 x2 SQUAD',
+        maxVal: recruitBonus,
+        label: `🔒 +${recruitBonus} SQUAD`,
         color: '#10b981',
         lockHitsRemaining: lockHits,
         lockHitsMax: lockHits,
         pairId,
       });
+      const hazVal = -(1 + Math.floor(threatLevel * 0.25));
       gateQueue.push({
         spawnTime: startTime,
         lane: threatLane,
-        kind: 'CHARGE_ADD',
-        val: 2,
-        minVal: 0,
-        maxVal: maxAddCap,
-        hitsPerStep: hitsPerIncrement,
+        kind: 'HAZARD',
+        val: hazVal,
+        minVal: hazVal,
+        maxVal: 0,
+        hitsPerStep: Math.min(8, 4 + Math.floor(threatLevel * 0.2)),
         pairId,
       });
     } else if (waveVariant === 1) {
@@ -849,7 +855,7 @@ export class WaveGenerator {
                   : buffType === 'BLAST' ? '💥 BLAST SPLASH AoE'
                   : '🔥 FIRE RATE +25%';
       const color = buffType === 'AP' ? '#fde047' : buffType === 'CRYO' ? '#22d3ee' : buffType === 'BLAST' ? '#fb923c' : '#f43f5e';
-      const lockHits = Math.min(30, Math.round(8 + threatLevel * 0.9));
+      const lockHits = Math.min(36, Math.round(12 + threatLevel * 1.2));
 
       gateQueue.push({
         spawnTime: startTime,
@@ -864,7 +870,7 @@ export class WaveGenerator {
         lockHitsMax: lockHits,
         pairId,
       });
-      const hazVal = -(2 + Math.floor(threatLevel * 0.2));
+      const hazVal = -(2 + Math.floor(threatLevel * 0.25));
       gateQueue.push({
         spawnTime: startTime,
         lane: threatLane,
@@ -872,7 +878,7 @@ export class WaveGenerator {
         val: hazVal,
         minVal: hazVal,
         maxVal: 0,
-        hitsPerStep: Math.min(6, 4 + Math.floor(threatLevel * 0.15)),
+        hitsPerStep: Math.min(8, 4 + Math.floor(threatLevel * 0.2)),
         pairId,
       });
     } else if (waveVariant === 2) {
@@ -884,12 +890,12 @@ export class WaveGenerator {
         val: 0,
         minVal: 0,
         maxVal: 0,
-        hitsPerStep: 4,
-        altarSacrificeCost: Math.min(18, 6 + Math.floor(threatLevel * 0.2)),
+        hitsPerStep: 6,
+        altarSacrificeCost: Math.min(12, 4 + Math.floor(threatLevel * 0.25)),
         altarWeaponReward: threatLevel % 2 === 0 ? 'laserWeapon' : 'homingMissiles',
         pairId,
       });
-      const hazVal = -(2 + Math.floor(threatLevel * 0.22));
+      const hazVal = -(2 + Math.floor(threatLevel * 0.25));
       gateQueue.push({
         spawnTime: startTime,
         lane: threatLane,
@@ -897,23 +903,23 @@ export class WaveGenerator {
         val: hazVal,
         minVal: hazVal,
         maxVal: 0,
-        hitsPerStep: Math.min(6, 4 + Math.floor(threatLevel * 0.15)),
+        hitsPerStep: Math.min(8, 4 + Math.floor(threatLevel * 0.2)),
         pairId,
       });
     } else {
-      // Standard Charge Add (+3 to +maxAddCap) vs Hazard
-      const startVal = Math.max(1, Math.min(4, 1 + Math.floor(threatLevel * 0.15)));
+      // Standard Charge Add (+1 to maxAddCap) vs Hazard
+      const maxCap = Math.min(4, 2 + Math.floor(threatLevel * 0.1));
       gateQueue.push({
         spawnTime: startTime,
         lane: greedLane,
         kind: 'CHARGE_ADD',
-        val: startVal,
+        val: 1,
         minVal: 0,
-        maxVal: maxAddCap,
+        maxVal: maxCap,
         hitsPerStep: hitsPerIncrement,
         pairId,
       });
-      const hazVal = -(1 + Math.floor(threatLevel * 0.2));
+      const hazVal = -(1 + Math.floor(threatLevel * 0.25));
       gateQueue.push({
         spawnTime: startTime,
         lane: threatLane,
@@ -921,7 +927,7 @@ export class WaveGenerator {
         val: hazVal,
         minVal: hazVal,
         maxVal: 0,
-        hitsPerStep: Math.min(6, 4 + Math.floor(threatLevel * 0.15)),
+        hitsPerStep: Math.min(8, 4 + Math.floor(threatLevel * 0.2)),
         pairId,
       });
     }
@@ -948,95 +954,129 @@ export class WaveGenerator {
       }
     }
 
-    // 3. Armory Crate (Armor & Specialist Drops)
-    const crateLane = (threatLevel + Math.floor(startTime * 2)) % 3;
-    const crateHP = Math.round(baseEnemyHP * (2.1 + threatLevel * 0.15));
-    const crateBoosts: ('AP' | 'VANGUARD' | 'SNIPER' | 'MORTAR')[] = ['AP', 'VANGUARD', 'SNIPER', 'MORTAR'];
-    const cBoost = crateBoosts[threatLevel % crateBoosts.length];
-    const cLabel = cBoost === 'AP' ? '⚡ AP ROUNDS (2.5x vs 🛡️)'
-                 : cBoost === 'VANGUARD' ? '⚡ +2 VANGUARD SPECS'
-                 : cBoost === 'SNIPER' ? '💎 +2 SNIPER SPECS'
-                 : '🟡 +1 EMP MORTAR SPEC';
-    const cColor = cBoost === 'AP' ? '#fde047' : cBoost === 'VANGUARD' ? '#f97316' : cBoost === 'SNIPER' ? '#06b6d4' : '#eab308';
-    crateQueue.push({
-      spawnTime: startTime + 1.35,
-      lane3: crateLane,
-      hp: crateHP,
-      maxHp: crateHP,
-      boostType: cBoost,
-      label: cLabel,
-      color: cColor,
-    });
+    // 3. Armory Crate (Armor & Specialist Drops) - Spawns strictly every 3rd threat level
+    if (threatLevel % 3 === 0) {
+      const crateLane = (threatLevel + Math.floor(startTime * 2)) % 3;
+      const crateHP = Math.round(baseEnemyHP * (3.5 + threatLevel * 0.2));
+      const crateBoosts: ('AP' | 'VANGUARD' | 'SNIPER' | 'MORTAR')[] = ['AP', 'VANGUARD', 'SNIPER', 'MORTAR'];
+      const cBoost = crateBoosts[threatLevel % crateBoosts.length];
+      const cLabel = cBoost === 'AP' ? '⚡ AP ROUNDS (2.5x vs 🛡️)'
+                   : cBoost === 'VANGUARD' ? '⚡ +1 VANGUARD SPEC'
+                   : cBoost === 'SNIPER' ? '💎 +1 SNIPER SPEC'
+                   : '🟡 +1 EMP MORTAR SPEC';
+      const cColor = cBoost === 'AP' ? '#fde047' : cBoost === 'VANGUARD' ? '#f97316' : cBoost === 'SNIPER' ? '#06b6d4' : '#eab308';
+      crateQueue.push({
+        spawnTime: startTime + 1.35,
+        lane3: crateLane,
+        hp: crateHP,
+        maxHp: crateHP,
+        boostType: cBoost,
+        label: cLabel,
+        color: cColor,
+      });
+    }
 
     // 4. Enemy Waves (Marching Behind Gates & Flanking)
-    const runnerCount = Math.min(5, 2 + Math.floor(threatLevel * 0.3));
+    const runnerCount = Math.min(8, 3 + Math.floor(threatLevel * 0.45));
     for (let r = 0; r < runnerCount; r++) {
       const eHp = Math.round(baseEnemyHP * 0.95);
       enemySchedule.push({
-        spawnTime: startTime + 0.45 + r * 0.30,
+        spawnTime: startTime + 0.35 + r * 0.25,
         xNorm: 0.15 + (r / Math.max(1, runnerCount - 1)) * 0.70,
         kind: r % 2 === 0 ? 'RUNNER' : 'SPRINTER',
         hp: eHp,
         maxHp: eHp,
-        speedMult: r % 2 === 0 ? 1.15 : 1.65,
+        speedMult: (r % 2 === 0 ? 1.25 : 1.75) + Math.min(0.5, threatLevel * 0.03),
       });
     }
 
     // Flanking Sprinters
-    const sprinterCount = Math.min(4, 1 + Math.floor(threatLevel * 0.25));
+    const sprinterCount = Math.min(6, 2 + Math.floor(threatLevel * 0.35));
     for (let s = 0; s < sprinterCount; s++) {
-      const sHp = Math.round(baseEnemyHP * 0.75);
+      const sHp = Math.round(baseEnemyHP * 0.80);
+      const laneNorm = s % 2 === 0 ? 0.20 : 0.80;
       enemySchedule.push({
-        spawnTime: startTime + 1.45 + s * 0.45,
-        xNorm: threatLane === 0 ? 0.25 : 0.75,
+        spawnTime: startTime + 1.2 + s * 0.35,
+        xNorm: laneNorm,
         kind: 'SPRINTER',
         hp: sHp,
         maxHp: sHp,
-        speedMult: 1.70,
+        speedMult: 1.85 + Math.min(0.7, threatLevel * 0.04),
       });
     }
 
     // Heavy Assault Formation
-    const isBossWave = threatLevel % 5 === 0 && startTime > 15;
+    const isBossWave = threatLevel % 5 === 0 && threatLevel >= 5;
     if (isBossWave) {
       const isTitan = threatLevel % 10 === 0;
       const bossHp = Math.round(baseEnemyHP * (isTitan ? 8.5 : 5.5));
       enemySchedule.push({
-        spawnTime: startTime + 2.4,
+        spawnTime: startTime + 2.0,
         xNorm: 0.50,
         kind: isTitan ? 'TITAN' : 'WARDEN',
         name: isTitan ? `TITAN OMEGA (THREAT ${threatLevel})` : `WARDEN PRIME (THREAT ${threatLevel})`,
         hp: bossHp,
         maxHp: bossHp,
-        speedMult: 0.85,
+        speedMult: 0.85 + Math.min(0.35, threatLevel * 0.02),
       });
+
+      // Boss escorts at threat >= 10
+      if (threatLevel >= 10) {
+        enemySchedule.push({
+          spawnTime: startTime + 2.3,
+          xNorm: 0.25,
+          kind: 'SHIELD_BEARER',
+          hp: Math.round(baseEnemyHP * 1.6),
+          maxHp: Math.round(baseEnemyHP * 1.6),
+          speedMult: 0.90,
+        });
+        enemySchedule.push({
+          spawnTime: startTime + 2.3,
+          xNorm: 0.75,
+          kind: 'SHIELD_BEARER',
+          hp: Math.round(baseEnemyHP * 1.6),
+          maxHp: Math.round(baseEnemyHP * 1.6),
+          speedMult: 0.90,
+        });
+      }
     } else {
       // Brutes & Shield Bearers
-      const heavyCount = Math.min(3, 1 + Math.floor(threatLevel * 0.2));
+      const heavyCount = Math.min(4, 1 + Math.floor(threatLevel * 0.25));
       for (let h = 0; h < heavyCount; h++) {
-        const isShield = threatLevel >= 4 && h === 0;
-        const bHp = Math.round(baseEnemyHP * (isShield ? 1.5 : 2.0));
+        const isShield = threatLevel >= 3 && h === 0;
+        const bHp = Math.round(baseEnemyHP * (isShield ? 1.6 : 2.2));
         enemySchedule.push({
-          spawnTime: startTime + 2.0 + h * 0.4,
-          xNorm: 0.25 + h * 0.25,
+          spawnTime: startTime + 1.8 + h * 0.35,
+          xNorm: 0.22 + h * 0.28,
           kind: isShield ? 'SHIELD_BEARER' : 'BRUTE',
           hp: bHp,
           maxHp: bHp,
-          speedMult: 0.95,
+          speedMult: 0.95 + Math.min(0.3, threatLevel * 0.02),
         });
       }
 
-      // Shooters / Artillery
-      if (threatLevel >= 3) {
-        const shHp = Math.round(baseEnemyHP * 1.3);
+      // Shooters / Artillery (spawn from Threat >= 2)
+      if (threatLevel >= 2) {
+        const shHp = Math.round(baseEnemyHP * 1.35);
         enemySchedule.push({
-          spawnTime: startTime + 2.8,
+          spawnTime: startTime + 2.4,
           xNorm: (threatLevel % 2 === 0 ? 0.22 : 0.78),
           kind: 'SHOOTER',
           hp: shHp,
           maxHp: shHp,
-          speedMult: 0.92,
+          speedMult: 0.95,
         });
+        // Dual shooters at threat >= 7
+        if (threatLevel >= 7) {
+          enemySchedule.push({
+            spawnTime: startTime + 2.7,
+            xNorm: (threatLevel % 2 === 0 ? 0.78 : 0.22),
+            kind: 'SHOOTER',
+            hp: shHp,
+            maxHp: shHp,
+            speedMult: 0.95,
+          });
+        }
       }
     }
 

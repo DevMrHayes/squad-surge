@@ -498,21 +498,31 @@ it('Shooting a Sacrifice Altar purifies it and drops sacrifice cost to 0', () =>
 // 22. Endless Mode Chunk Generation & Threat Escalation
 it('Endless Mode dynamically escalates threat level, enemy HP, and gate caps', () => {
   function getEndlessThreat(seconds) {
-    return Math.floor(seconds / 20) + 1;
+    return Math.floor(seconds / 10) + 1;
   }
 
   assert.strictEqual(getEndlessThreat(0), 1, 'Initial threat level is 1');
-  assert.strictEqual(getEndlessThreat(19.9), 1, 'Threat stays 1 before 20s');
-  assert.strictEqual(getEndlessThreat(20), 2, 'Threat advances to 2 at 20s');
-  assert.strictEqual(getEndlessThreat(100), 6, 'Threat advances to 6 at 100s');
+  assert.strictEqual(getEndlessThreat(9.9), 1, 'Threat stays 1 before 10s');
+  assert.strictEqual(getEndlessThreat(10), 2, 'Threat advances to 2 at 10s');
+  assert.strictEqual(getEndlessThreat(120), 13, 'Threat advances to 13 at 2 mins (Good benchmark)');
+  assert.strictEqual(getEndlessThreat(180), 19, 'Threat advances to 19 at 3 mins (Great benchmark)');
+  assert.strictEqual(getEndlessThreat(300), 31, 'Threat advances to 31 at 5 mins (Incredible benchmark)');
 
   function getEndlessBaseHP(threat) {
-    return Math.round(16 + Math.pow(threat, 1.28) * 3.6);
+    return Math.round(28 + Math.pow(threat, 1.55) * 5.5);
   }
 
-  assert.strictEqual(getEndlessBaseHP(1), 20, 'Threat 1 base HP is 20');
+  assert.strictEqual(getEndlessBaseHP(1), 34, 'Threat 1 base HP is 34');
   assert.ok(getEndlessBaseHP(5) > getEndlessBaseHP(1), 'Threat 5 HP must exceed Threat 1');
   assert.ok(getEndlessBaseHP(10) > getEndlessBaseHP(5), 'Threat 10 HP must exceed Threat 5');
+  assert.ok(getEndlessBaseHP(13) >= 300, 'Threat 13 base HP exceeds 300 for solid 2-min challenge');
+
+  // Endless squad cap enforcement (no runaway 220 squads)
+  function getEndlessSquadCap(isEndless) {
+    return isEndless ? 40 : 220;
+  }
+  assert.strictEqual(getEndlessSquadCap(true), 40, 'Endless squad cap is strictly 40 soldiers');
+  assert.strictEqual(getEndlessSquadCap(false), 220, 'Campaign squad cap remains 220 soldiers');
 
   // Milestone boss wave at every 5th threat
   for (let t = 1; t <= 15; t++) {
