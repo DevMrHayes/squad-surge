@@ -365,15 +365,18 @@ export class WaveGenerator {
           pairId,
         });
       } else if (isTacticalBuffGate) {
-        const buffType = archetype.id === 'ARMORED_SIEGE' ? 'AP' 
+        const buffType = (sector >= 2 && w === 2) ? 'SPLIT_SQUAD'
+                       : archetype.id === 'ARMORED_SIEGE' ? 'AP' 
                        : archetype.id === 'SWARM_INFILTRATION' ? 'CRYO'
                        : archetype.id === 'ARTILLERY_STORM' ? 'BLAST'
                        : 'FIRERATE';
-        const label = buffType === 'AP' ? '⚡ AP ROUNDS (2.5x vs 🛡️)'
+        const label = buffType === 'SPLIT_SQUAD' ? '⚡ DUAL-THUMB SPLIT SQUAD'
+                    : buffType === 'AP' ? '⚡ AP ROUNDS (2.5x vs 🛡️)'
                     : buffType === 'CRYO' ? '❄️ CRYO SLOW (-45% SPD)'
                     : buffType === 'BLAST' ? '💥 BLAST SPLASH AoE'
                     : '🔥 FIRE RATE +25%';
-        const color = buffType === 'AP' ? '#fde047'
+        const color = buffType === 'SPLIT_SQUAD' ? '#38bdf8'
+                    : buffType === 'AP' ? '#fde047'
                     : buffType === 'CRYO' ? '#22d3ee'
                     : buffType === 'BLAST' ? '#fb923c'
                     : '#f43f5e';
@@ -483,32 +486,45 @@ export class WaveGenerator {
 
       cursorTime += 2.2;
 
-      // Ricochet Prism Mirrors spawn in the open firing corridor alongside Armory Crates / Main Assault
-      // so Gates in front never block the player's line of fire to the reflective bevel!
+      // Ricochet Prism Mirrors & Central Diamond Beam Splitters spawn in the open corridor
       const crateLane3 = (level + w) % 3;
       if (level >= 6 && (w === 0 || archetype.id === 'ARMORED_SIEGE' || archetype.id === 'PRECISION_GRID' || sector >= 2)) {
-        const mirrorOnLeft = crateLane3 !== 0; // Opposite wall from Crate so shots bank around the Crate!
-        obstacleQueue.push({
-          spawnTime: cursorTime - 0.15,
-          type: 'PRISM_MIRROR',
-          lane: mirrorOnLeft ? 'LEFT' : 'RIGHT',
-          angleDeg: mirrorOnLeft ? 45 : -45,
-        });
+        if (w % 2 === 0 && sector >= 2) {
+          // Central Diamond Beam Splitter (Highway Median)
+          obstacleQueue.push({
+            spawnTime: cursorTime - 0.15,
+            type: 'BEAM_SPLITTER',
+            lane: 'CENTER',
+            angleDeg: 0,
+          });
+        } else {
+          // Wall Ricochet Prism Mirror
+          const mirrorOnLeft = crateLane3 !== 0;
+          obstacleQueue.push({
+            spawnTime: cursorTime - 0.15,
+            type: 'PRISM_MIRROR',
+            lane: mirrorOnLeft ? 'LEFT' : 'RIGHT',
+            angleDeg: mirrorOnLeft ? 45 : -45,
+          });
+        }
       }
 
       // 4. ARMORY CRATES & SPECIALISTS (High durability so they act as real tactical barriers)
       if (level >= 2 && (w % 2 === 0 || w === waveCount - 1)) {
-        const boostType = archetype.id === 'SWARM_INFILTRATION' ? 'VANGUARD'
+        const boostType = (sector >= 2 && w === waveCount - 1) ? 'SPLIT_SQUAD'
+                        : archetype.id === 'SWARM_INFILTRATION' ? 'VANGUARD'
                         : archetype.id === 'ARMORED_SIEGE' ? 'AP'
                         : archetype.id === 'ARTILLERY_STORM' ? 'MORTAR'
                         : archetype.id === 'PRECISION_GRID' ? 'SNIPER'
                         : 'BLAST';
-        const label = boostType === 'VANGUARD' ? '⚡ +2 VANGUARD SPECS'
+        const label = boostType === 'SPLIT_SQUAD' ? '⚡ DUAL-THUMB SPLIT SQUAD'
+                    : boostType === 'VANGUARD' ? '⚡ +2 VANGUARD SPECS'
                     : boostType === 'AP' ? '⚡ AP ROUNDS (2.5x vs 🛡️)'
                     : boostType === 'MORTAR' ? '🟡 +1 EMP MORTAR SPEC'
                     : boostType === 'SNIPER' ? '💎 +2 SNIPER SPECS'
                     : '💥 BLAST SPLASH AoE';
-        const color = boostType === 'VANGUARD' ? '#f97316'
+        const color = boostType === 'SPLIT_SQUAD' ? '#38bdf8'
+                    : boostType === 'VANGUARD' ? '#f97316'
                     : boostType === 'AP' ? '#fde047'
                     : boostType === 'MORTAR' ? '#eab308'
                     : boostType === 'SNIPER' ? '#06b6d4'
@@ -932,10 +948,16 @@ export class WaveGenerator {
       });
     }
 
-    // 2. Obstacles: Speed Strips, Hazard Strips, or Ricochet Prism Mirrors
+    // 2. Obstacles: Speed Strips, Hazard Strips, Ricochet Prism Mirrors, or Diamond Beam Splitters
     if (threatLevel >= 2) {
-      const isPrism = threatLevel >= 3 && Math.random() < 0.55;
-      if (isPrism) {
+      if (threatLevel % 3 === 0) {
+        obstacleQueue.push({
+          spawnTime: startTime + 0.85,
+          type: 'BEAM_SPLITTER',
+          lane: 'CENTER',
+          angleDeg: 0,
+        });
+      } else if (threatLevel % 2 === 1) {
         obstacleQueue.push({
           spawnTime: startTime + 0.85,
           type: 'PRISM_MIRROR',
@@ -945,7 +967,7 @@ export class WaveGenerator {
       } else {
         obstacleQueue.push({
           spawnTime: startTime + 0.85,
-          type: threatLevel % 2 === 0 ? 'SPEED_STRIP' : 'HAZARD_STRIP',
+          type: 'SPEED_STRIP',
           lane: threatLane === 0 ? 'LEFT' : 'RIGHT',
           angleDeg: 0,
           overclockRate: 1.5,
@@ -954,17 +976,24 @@ export class WaveGenerator {
       }
     }
 
-    // 3. Armory Crate (Armor & Specialist Drops) - Spawns strictly every 3rd threat level
+    // 3. Armory Crate (Armor, Specialists & Dual-Thumb Split Squad) - Spawns strictly every 3rd threat level
     if (threatLevel % 3 === 0) {
       const crateLane = (threatLevel + Math.floor(startTime * 2)) % 3;
       const crateHP = Math.round(baseEnemyHP * (3.5 + threatLevel * 0.2));
-      const crateBoosts: ('AP' | 'VANGUARD' | 'SNIPER' | 'MORTAR')[] = ['AP', 'VANGUARD', 'SNIPER', 'MORTAR'];
+      const crateBoosts: ('AP' | 'SPLIT_SQUAD' | 'VANGUARD' | 'SNIPER' | 'MORTAR')[] = [
+        'AP', 'SPLIT_SQUAD', 'VANGUARD', 'SNIPER', 'MORTAR'
+      ];
       const cBoost = crateBoosts[threatLevel % crateBoosts.length];
       const cLabel = cBoost === 'AP' ? '⚡ AP ROUNDS (2.5x vs 🛡️)'
+                   : cBoost === 'SPLIT_SQUAD' ? '⚡ DUAL-THUMB SPLIT SQUAD'
                    : cBoost === 'VANGUARD' ? '⚡ +1 VANGUARD SPEC'
                    : cBoost === 'SNIPER' ? '💎 +1 SNIPER SPEC'
                    : '🟡 +1 EMP MORTAR SPEC';
-      const cColor = cBoost === 'AP' ? '#fde047' : cBoost === 'VANGUARD' ? '#f97316' : cBoost === 'SNIPER' ? '#06b6d4' : '#eab308';
+      const cColor = cBoost === 'AP' ? '#fde047'
+                   : cBoost === 'SPLIT_SQUAD' ? '#38bdf8'
+                   : cBoost === 'VANGUARD' ? '#f97316'
+                   : cBoost === 'SNIPER' ? '#06b6d4'
+                   : '#eab308';
       crateQueue.push({
         spawnTime: startTime + 1.35,
         lane3: crateLane,

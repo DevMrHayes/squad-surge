@@ -126,7 +126,12 @@ export class GameLoop {
         blastTimer: 0,
         laserWeapon: false,
         homingMissiles: false,
+        splitSquadTimer: 0,
       },
+      leftWingX: this.cw * 0.28,
+      rightWingX: this.cw * 0.72,
+      targetLeftX: this.cw * 0.28,
+      targetRightX: this.cw * 0.72,
       dragSpeedMultiplier: 1.0,
       fireRateMultiplier: 1.0,
     };
@@ -221,26 +226,67 @@ export class GameLoop {
     }
   }
 
+  private activeTouches: Map<number, number> = new Map();
+
   private setupTouchControls(): void {
-    const handleMove = (clientX: number) => {
-      const rect = this.canvas.getBoundingClientRect();
-      const rawX = clientX - rect.left;
-      this.targetX = Math.max(32, Math.min(this.cw - 32, rawX));
+    const updateTouchPositions = () => {
+      const isSplit = (this.player.buffs.splitSquadTimer ?? 0) > 0;
+      if (this.activeTouches.size === 0) return;
+
+      const xs = Array.from(this.activeTouches.values()).sort((a, b) => a - b);
+
+      if (isSplit) {
+        if (xs.length >= 2) {
+          // Dual-touch: leftmost touch controls Left Wing, rightmost touch controls Right Wing
+          this.player.targetLeftX = Math.max(28, Math.min(this.cw / 2 - 20, xs[0]));
+          this.player.targetRightX = Math.max(this.cw / 2 + 20, Math.min(this.cw - 28, xs[xs.length - 1]));
+        } else {
+          // Single-touch during split: update targeted wing based on screen half
+          const x = xs[0];
+          if (x < this.cw / 2) {
+            this.player.targetLeftX = Math.max(28, Math.min(this.cw / 2 - 20, x));
+          } else {
+            this.player.targetRightX = Math.max(this.cw / 2 + 20, Math.min(this.cw - 28, x));
+          }
+        }
+      } else {
+        this.targetX = Math.max(32, Math.min(this.cw - 32, xs[0]));
+      }
     };
 
     this.canvas.addEventListener('pointerdown', (e) => {
       this.isDragging = true;
-      handleMove(e.clientX);
+      const rect = this.canvas.getBoundingClientRect();
+      this.activeTouches.set(e.pointerId, e.clientX - rect.left);
+      updateTouchPositions();
       if (this.mode === 'READY') this.startCombat();
     });
 
     window.addEventListener('pointermove', (e) => {
       if (!this.isDragging) return;
-      handleMove(e.clientX);
+      if (this.activeTouches.has(e.pointerId)) {
+        const rect = this.canvas.getBoundingClientRect();
+        this.activeTouches.set(e.pointerId, e.clientX - rect.left);
+        updateTouchPositions();
+      }
     });
 
-    window.addEventListener('pointerup', () => {
-      this.isDragging = false;
+    window.addEventListener('pointerup', (e) => {
+      this.activeTouches.delete(e.pointerId);
+      if (this.activeTouches.size === 0) {
+        this.isDragging = false;
+      } else {
+        updateTouchPositions();
+      }
+    });
+
+    window.addEventListener('pointercancel', (e) => {
+      this.activeTouches.delete(e.pointerId);
+      if (this.activeTouches.size === 0) {
+        this.isDragging = false;
+      } else {
+        updateTouchPositions();
+      }
     });
   }
 
@@ -306,13 +352,27 @@ export class GameLoop {
     const isLeft = oDef.lane === 'LEFT';
     const prismX = isLeft ? 54 : this.cw - 54;
     const stripX = isLeft ? this.cw * 0.27 : this.cw * 0.73;
+    let ox = stripX;
+    let ow = 116;
+    let oh = 110;
+
+    if (oDef.type === 'PRISM_MIRROR') {
+      ox = prismX;
+      ow = 78;
+      oh = 76;
+    } else if (oDef.type === 'BEAM_SPLITTER') {
+      ox = this.cw / 2;
+      ow = 54;
+      oh = 54;
+    }
+
     this.obstacles.push({
       id: Math.random(),
       type: oDef.type,
-      x: oDef.type === 'PRISM_MIRROR' ? prismX : stripX,
+      x: ox,
       y: -50,
-      width: oDef.type === 'PRISM_MIRROR' ? 78 : 116,
-      height: oDef.type === 'PRISM_MIRROR' ? 76 : 110,
+      width: ow,
+      height: oh,
       angleDeg: oDef.angleDeg,
       lane: oDef.lane,
       overclockRate: oDef.overclockRate,
@@ -341,6 +401,17 @@ export class GameLoop {
     } else if (boostType === 'FIRERATE') {
       this.player.buffs.rapidTimer = duration;
       this.spawnFloatText(x, y - 24, '🔥 FIRE RATE +35%!', color);
+    } else if (boostType === 'SPLIT_SQUAD') {
+      this.player.buffs.splitSquadTimer = 10.0;
+      const spreadOffset = Math.min(84, this.cw * 0.22);
+      this.player.leftWingX = Math.max(34, this.player.x - spreadOffset);
+      this.player.rightWingX = Math.min(this.cw - 34, this.player.x + spreadOffset);
+      this.player.targetLeftX = this.player.leftWingX;
+      this.player.targetRightX = this.player.rightWingX;
+      this.spawnFloatText(x, y - 24, '⚡ DUAL-THUMB SPLIT SQUAD (10s)!', '#38bdf8');
+      if (this.shockwaves) {
+        CombatEngine.createShockwave(x, y, '#38bdf8', this.shockwaves, 72);
+      }
     } else if (boostType === 'SHIELD') {
       const shieldAdd = this.isEndless ? 1 : 2;
       this.player.shields = Math.min(this.isEndless ? 2 : 5, this.player.shields + shieldAdd);
@@ -504,14 +575,32 @@ export class GameLoop {
     if (this.player.buffs.cryoTimer > 0) this.player.buffs.cryoTimer -= dt;
     if (this.player.buffs.rapidTimer > 0) this.player.buffs.rapidTimer -= dt;
     if (this.player.buffs.blastTimer > 0) this.player.buffs.blastTimer -= dt;
+    if (this.player.buffs.splitSquadTimer > 0) this.player.buffs.splitSquadTimer -= dt;
 
     const squadY = this.ch * 0.78;
     this.player.y = squadY;
 
-    // 1. Smooth squad movement toward targetX
+    // 1. Smooth squad movement toward targetX or dual wings
     const dragSpeed = 20 * this.player.dragSpeedMultiplier;
-    this.player.x += (this.targetX - this.player.x) * Math.min(1.0, dragSpeed * dt);
-    this.player.x = Math.max(34, Math.min(this.cw - 34, this.player.x));
+    const isSplitMode = (this.player.buffs.splitSquadTimer ?? 0) > 0;
+    if (isSplitMode) {
+      const targetL = this.player.targetLeftX ?? (this.cw * 0.28);
+      const targetR = this.player.targetRightX ?? (this.cw * 0.72);
+      this.player.leftWingX = (this.player.leftWingX ?? targetL) + (targetL - (this.player.leftWingX ?? targetL)) * Math.min(1.0, dragSpeed * dt);
+      this.player.rightWingX = (this.player.rightWingX ?? targetR) + (targetR - (this.player.rightWingX ?? targetR)) * Math.min(1.0, dragSpeed * dt);
+      this.player.leftWingX = Math.max(28, Math.min(this.cw / 2 - 20, this.player.leftWingX));
+      this.player.rightWingX = Math.max(this.cw / 2 + 20, Math.min(this.cw - 28, this.player.rightWingX));
+      this.player.x = (this.player.leftWingX + this.player.rightWingX) / 2;
+    } else {
+      this.player.x += (this.targetX - this.player.x) * Math.min(1.0, dragSpeed * dt);
+      this.player.x = Math.max(34, Math.min(this.cw - 34, this.player.x));
+      if (this.player.leftWingX !== undefined) {
+        this.player.leftWingX += (this.player.x - this.player.leftWingX) * Math.min(1.0, 10 * dt);
+      }
+      if (this.player.rightWingX !== undefined) {
+        this.player.rightWingX += (this.player.x - this.player.rightWingX) * Math.min(1.0, 10 * dt);
+      }
+    }
 
     // 2. Process Scheduled Spawns
     while (this.gateQueue.length > 0 && this.gateQueue[0].spawnTime <= this.elapsed) {
@@ -543,9 +632,12 @@ export class GameLoop {
     // 4. Update Bullets & Obstacle Interactions
     CombatEngine.updateBullets(this.bullets, dt, this.enemies, this.particles, (amt) => {
       this.trauma = Math.min(1.0, this.trauma + amt);
-    }, this.shockwaves);
+    }, this.shockwaves, this.cw);
 
     CombatEngine.handleObstacleInteractions(this.player, this.obstacles, this.bullets, dt, this.particles);
+
+    // Prevent enemies from phasing through diamond beam splitters or wall ricochet prisms
+    CombatEngine.handleEnemyObstacleCollisions(this.enemies, this.obstacles, this.cw);
 
     CombatEngine.handleGateAndCrateHits(
       this.gates, 
@@ -596,7 +688,14 @@ export class GameLoop {
       }
 
       // Traversal through gate
-      if (Math.abs(g.y - squadY) <= 22 && Math.abs(g.x - this.player.x) <= g.w / 2 + collectHalfW * 0.4) {
+      const touchesGate = isSplitMode
+        ? (Math.abs(g.y - squadY) <= 22 && (
+            Math.abs(g.x - (this.player.leftWingX ?? this.player.x)) <= g.w / 2 + 20 ||
+            Math.abs(g.x - (this.player.rightWingX ?? this.player.x)) <= g.w / 2 + 20
+          ))
+        : (Math.abs(g.y - squadY) <= 22 && Math.abs(g.x - this.player.x) <= g.w / 2 + collectHalfW * 0.4);
+
+      if (touchesGate) {
         // MUTUAL EXCLUSION: If gate is paired, shatter the sibling gate in this dilemma row
         if (g.pairId) {
           for (let s = this.gates.length - 1; s >= 0; s--) {

@@ -59,12 +59,19 @@ export interface PlayerState {
     blastTimer: number;
     laserWeapon: boolean;
     homingMissiles: boolean;
+    splitSquadTimer: number;
   };
+  leftWingX?: number;
+  rightWingX?: number;
+  targetLeftX?: number;
+  targetRightX?: number;
   dragSpeedMultiplier: number;
   fireRateMultiplier: number;
 }
 
 export type GateKind = 'CHARGE_ADD' | 'LOCKED_MULT' | 'BUFF_GATE' | 'HAZARD' | 'ALTAR' | 'QUANTUM';
+
+export type TacticalBoostType = 'AP' | 'CRYO' | 'BLAST' | 'FIRERATE' | 'SHIELD' | 'SNIPER' | 'VANGUARD' | 'MORTAR' | 'SPLIT_SQUAD';
 
 export interface Gate {
   id: number;
@@ -82,7 +89,7 @@ export interface Gate {
   lockHitsRemaining: number;
   lockHitsMax: number;
   unlocked: boolean;
-  boostType?: 'AP' | 'CRYO' | 'BLAST' | 'FIRERATE' | 'SHIELD' | 'SNIPER' | 'VANGUARD' | 'MORTAR';
+  boostType?: TacticalBoostType;
   label?: string;
   color?: string;
   hitScale: number;
@@ -105,13 +112,13 @@ export interface Crate {
   h: number;
   hp: number;
   maxHp: number;
-  boostType: 'AP' | 'CRYO' | 'BLAST' | 'FIRERATE' | 'SHIELD' | 'SNIPER' | 'VANGUARD' | 'MORTAR';
+  boostType: TacticalBoostType;
   label: string;
   color: string;
   hitScale: number;
 }
 
-export type ObstacleType = 'PRISM_MIRROR' | 'SPEED_STRIP' | 'HAZARD_STRIP';
+export type ObstacleType = 'PRISM_MIRROR' | 'SPEED_STRIP' | 'HAZARD_STRIP' | 'BEAM_SPLITTER';
 
 export interface FieldObstacle {
   id: number;
@@ -266,7 +273,7 @@ export interface GateQueueItem {
   hitsPerStep?: number;
   lockHitsRemaining?: number;
   lockHitsMax?: number;
-  boostType?: 'AP' | 'CRYO' | 'BLAST' | 'FIRERATE' | 'SHIELD' | 'SNIPER' | 'VANGUARD' | 'MORTAR';
+  boostType?: TacticalBoostType;
   label?: string;
   color?: string;
   altarSacrificeCost?: number;
@@ -281,7 +288,7 @@ export interface CrateQueueItem {
   lane3: number; // 0, 1, 2
   hp: number;
   maxHp: number;
-  boostType: 'AP' | 'CRYO' | 'BLAST' | 'FIRERATE' | 'SHIELD' | 'SNIPER' | 'VANGUARD' | 'MORTAR';
+  boostType: TacticalBoostType;
   label: string;
   color: string;
 }

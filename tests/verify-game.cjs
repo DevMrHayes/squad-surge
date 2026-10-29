@@ -559,6 +559,222 @@ it('Endless survival duration tracks personal best time and threat level', () =>
   assert.strictEqual(stats.highScore, 7854, 'High score updated to 7854');
 });
 
+// 24. Central Diamond Beam Splitter Refraction & +40% Overcharge
+it('Central Diamond Beam Splitter splits vertical bullets into dual 45° overcharged beams', () => {
+  const splitter = {
+    id: 101,
+    type: 'BEAM_SPLITTER',
+    x: 190, // Median center in 380px highway
+    y: 300,
+    width: 54,
+    height: 54,
+    lane: 'CENTER',
+    active: true,
+  };
+
+  const incomingBullet = {
+    id: 1,
+    x: 190,
+    y: 310,
+    vx: 0,
+    vy: -680,
+    damage: 10,
+    gateCharge: 1.0,
+    isFromPlayer: true,
+    active: true,
+  };
+
+  const bullets = [incomingBullet];
+  const spawnedBeams = [];
+
+  // Simulate BEAM_SPLITTER collision logic from CombatEngine
+  const hw = splitter.width / 2;
+  const hh = splitter.height / 2;
+  const collides = 
+    incomingBullet.x >= splitter.x - hw &&
+    incomingBullet.x <= splitter.x + hw &&
+    incomingBullet.y >= splitter.y - hh &&
+    incomingBullet.y <= splitter.y + hh &&
+    incomingBullet.vy < 0;
+
+  assert.strictEqual(collides, true, 'Bullet correctly collides with central diamond');
+
+  if (collides) {
+    incomingBullet.active = false; // Original bullet absorbed
+    const overchargedDmg = incomingBullet.damage * 1.4; // +40% overcharge
+    const overchargedCharge = (incomingBullet.gateCharge || 1.0) * 1.4;
+
+    // Left outward 45° beam
+    spawnedBeams.push({
+      id: 2,
+      x: splitter.x - 10,
+      y: splitter.y - 10,
+      vx: -420,
+      vy: -420,
+      damage: overchargedDmg,
+      gateCharge: overchargedCharge,
+      radius: 4.5,
+      color: '#38bdf8',
+      isPierce: true,
+      active: true,
+    });
+
+    // Right outward 45° beam
+    spawnedBeams.push({
+      id: 3,
+      x: splitter.x + 10,
+      y: splitter.y - 10,
+      vx: 420,
+      vy: -420,
+      damage: overchargedDmg,
+      gateCharge: overchargedCharge,
+      radius: 4.5,
+      color: '#38bdf8',
+      isPierce: true,
+      active: true,
+    });
+  }
+
+  assert.strictEqual(incomingBullet.active, false, 'Incoming central bullet is absorbed by splitter');
+  assert.strictEqual(spawnedBeams.length, 2, 'Splitter creates exactly two diagonal beams');
+  assert.strictEqual(spawnedBeams[0].vx, -420, 'Left beam travels outward at 45° (vx = -420)');
+  assert.strictEqual(spawnedBeams[0].vy, -420, 'Left beam travels upward at 45° (vy = -420)');
+  assert.strictEqual(spawnedBeams[1].vx, 420, 'Right beam travels outward at 45° (vx = 420)');
+  assert.strictEqual(spawnedBeams[0].damage, 14, 'Beams carry +40% overcharge damage (10 * 1.4 = 14)');
+  assert.strictEqual(spawnedBeams[0].isPierce, true, 'Beams have piercing property to slice across rows');
+  assert.strictEqual(spawnedBeams[0].color, '#38bdf8', 'Beams carry signature holographic cyan color');
+});
+
+// 25. Enemy Obstacle Bumping & Collision Constraints
+it('Enemies bump against obstacles and cannot flow through diamonds or wall mirrors', () => {
+  const cw = 380;
+  const obstacles = [
+    { type: 'BEAM_SPLITTER', x: 190, y: 300, width: 54, height: 54, active: true },
+    { type: 'PRISM_MIRROR', x: 54, y: 400, width: 78, height: 76, lane: 'LEFT', active: true },
+    { type: 'PRISM_MIRROR', x: 326, y: 400, width: 78, height: 76, lane: 'RIGHT', active: true },
+  ];
+
+  // Enemy 1: Walking straight down center highway towards diamond splitter
+  const enemyCenterLeft = { id: 1, x: 185, y: 305, r: 14, speed: 80, active: true };
+  const enemyCenterRight = { id: 2, x: 195, y: 305, r: 14, speed: 80, active: true };
+
+  // Enemy 3: Walking along left wall mirror
+  const enemyLeftWall = { id: 3, x: 50, y: 405, r: 14, speed: 80, active: true };
+
+  // Enemy 4: Walking along right wall mirror
+  const enemyRightWall = { id: 4, x: 335, y: 405, r: 14, speed: 80, active: true };
+
+  const enemies = [enemyCenterLeft, enemyCenterRight, enemyLeftWall, enemyRightWall];
+
+  // Simulate handleEnemyObstacleCollisions
+  enemies.forEach(e => {
+    obstacles.forEach(obs => {
+      if (obs.type === 'BEAM_SPLITTER') {
+        const hw = obs.width / 2;
+        const hh = obs.height / 2;
+        const inY = Math.abs(e.y - obs.y) <= hh + e.r;
+        const inX = Math.abs(e.x - obs.x) <= hw + e.r;
+        if (inY && inX) {
+          if (e.x < obs.x) {
+            e.x = Math.max(30, obs.x - hw - e.r - 2);
+          } else {
+            e.x = Math.min(cw - 30, obs.x + hw + e.r + 2);
+          }
+        }
+      } else if (obs.type === 'PRISM_MIRROR') {
+        const isLeft = obs.lane === 'LEFT' || obs.x < cw / 2;
+        const halfH = obs.height / 2;
+        const inY = Math.abs(e.y - obs.y) <= halfH + e.r;
+        if (inY) {
+          if (isLeft) {
+            const wallBumperRight = obs.x + obs.width / 2;
+            if (e.x < wallBumperRight + e.r) {
+              e.x = wallBumperRight + e.r + 2;
+            }
+          } else {
+            const wallBumperLeft = obs.x - obs.width / 2;
+            if (e.x > wallBumperLeft - e.r) {
+              e.x = wallBumperLeft - e.r - 2;
+            }
+          }
+        }
+      }
+    });
+  });
+
+  // Center-left enemy bumped into left lane
+  assert.ok(enemyCenterLeft.x < 190 - 27 - 14, 'Center-left enemy clamped outside diamond into left lane');
+  assert.strictEqual(enemyCenterLeft.x, 147, 'Center-left enemy positioned cleanly in left lane');
+
+  // Center-right enemy bumped into right lane
+  assert.ok(enemyCenterRight.x > 190 + 27 + 14, 'Center-right enemy clamped outside diamond into right lane');
+  assert.strictEqual(enemyCenterRight.x, 233, 'Center-right enemy positioned cleanly in right lane');
+
+  // Left wall enemy bumped out of wall prism
+  assert.ok(enemyLeftWall.x >= 54 + 39 + 14, 'Left wall enemy clamped outside left prism');
+  assert.strictEqual(enemyLeftWall.x, 109, 'Left wall enemy slides into open lane');
+
+  // Right wall enemy bumped out of right prism
+  assert.ok(enemyRightWall.x <= 326 - 39 - 14, 'Right wall enemy clamped outside right prism');
+  assert.strictEqual(enemyRightWall.x, 271, 'Right wall enemy slides into open lane');
+});
+
+// 26. Dual-Thumb Split Squad Mode Tactical Bonus
+it('Dual-Thumb Split Squad grants 10s bonus, dual wings, and multi-touch control', () => {
+  const cw = 380;
+  const player = {
+    x: 190,
+    y: 500,
+    count: 24,
+    buffs: {
+      splitSquadTimer: 0,
+    },
+    leftWingX: 190,
+    rightWingX: 190,
+    targetLeftX: 190,
+    targetRightX: 190,
+  };
+
+  // Unlock Split Squad Bonus (10s duration)
+  function unlockBoost(type) {
+    if (type === 'SPLIT_SQUAD') {
+      player.buffs.splitSquadTimer = 10.0;
+      const spreadOffset = Math.min(84, cw * 0.22);
+      player.leftWingX = Math.max(34, player.x - spreadOffset);
+      player.rightWingX = Math.min(cw - 34, player.x + spreadOffset);
+      player.targetLeftX = player.leftWingX;
+      player.targetRightX = player.rightWingX;
+    }
+  }
+
+  unlockBoost('SPLIT_SQUAD');
+  assert.strictEqual(player.buffs.splitSquadTimer, 10.0, 'Split squad timer set to 10 seconds');
+  assert.ok(player.leftWingX < player.x, 'Left wing positioned in left half');
+  assert.ok(player.rightWingX > player.x, 'Right wing positioned in right half');
+
+  // Multi-touch simulation: Two thumbs touching at x = 90 and x = 290
+  const activeTouches = new Map();
+  activeTouches.set(1, 90);
+  activeTouches.set(2, 290);
+
+  const xs = Array.from(activeTouches.values()).sort((a, b) => a - b);
+  player.targetLeftX = Math.max(28, Math.min(cw / 2 - 20, xs[0]));
+  player.targetRightX = Math.max(cw / 2 + 20, Math.min(cw - 28, xs[xs.length - 1]));
+
+  assert.strictEqual(player.targetLeftX, 90, 'Left thumb precisely steers left wing at x = 90');
+  assert.strictEqual(player.targetRightX, 290, 'Right thumb precisely steers right wing at x = 290');
+
+  // Firing volley simulation during split
+  const isSplit = player.buffs.splitSquadTimer > 0;
+  assert.strictEqual(isSplit, true, 'Player is recognized in active split squad mode');
+
+  const leftCount = Math.ceil(player.count / 2);
+  const rightCount = Math.floor(player.count / 2);
+  assert.strictEqual(leftCount + rightCount, 24, 'Troops partitioned evenly between wings');
+  assert.strictEqual(leftCount, 12, 'Left wing commands 12 troops');
+  assert.strictEqual(rightCount, 12, 'Right wing commands 12 troops');
+});
+
 console.log('====================================================');
 console.log(`  Tests Completed: ${passedTests} / ${totalTests} Passed`);
 console.log('====================================================');

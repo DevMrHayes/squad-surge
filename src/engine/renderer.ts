@@ -158,6 +158,61 @@ export class GameRenderer {
         ctx.fillText('RICOCHET +35%', wallX + (isLeft ? 4 : -4), obs.y - halfH - 4);
 
         ctx.restore();
+      } else if (obs.type === 'BEAM_SPLITTER') {
+        ctx.save();
+        const hw = (obs.width || 54) / 2;
+        const hh = (obs.height || 54) / 2;
+
+        // Outer rotating/pulsing glow diamond
+        ctx.shadowColor = '#38bdf8';
+        ctx.shadowBlur = 12;
+        ctx.fillStyle = 'rgba(15, 23, 42, 0.95)';
+        ctx.strokeStyle = '#38bdf8';
+        ctx.lineWidth = 2.5;
+
+        ctx.beginPath();
+        ctx.moveTo(obs.x, obs.y - hh);
+        ctx.lineTo(obs.x + hw, obs.y);
+        ctx.lineTo(obs.x, obs.y + hh);
+        ctx.lineTo(obs.x - hw, obs.y);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+
+        // Inner glowing refraction crystal (yellow gold)
+        ctx.strokeStyle = '#fde047';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(obs.x, obs.y - hh * 0.55);
+        ctx.lineTo(obs.x + hw * 0.55, obs.y);
+        ctx.lineTo(obs.x, obs.y + hh * 0.55);
+        ctx.lineTo(obs.x - hw * 0.55, obs.y);
+        ctx.closePath();
+        ctx.stroke();
+
+        // Holographic outward 45° dashed refraction vectors
+        ctx.strokeStyle = 'rgba(56, 189, 248, 0.65)';
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([3, 3]);
+        ctx.beginPath();
+        ctx.moveTo(obs.x - hw * 0.5, obs.y - hh * 0.5);
+        ctx.lineTo(obs.x - hw * 1.8, obs.y - hh * 1.8);
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.moveTo(obs.x + hw * 0.5, obs.y - hh * 0.5);
+        ctx.lineTo(obs.x + hw * 1.8, obs.y - hh * 1.8);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // Label
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = '#38bdf8';
+        ctx.font = '900 8.5px "JetBrains Mono", monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText('⚡ SPLIT +40%', obs.x, obs.y - hh - 6);
+
+        ctx.restore();
       }
     });
 
@@ -743,86 +798,220 @@ export class GameRenderer {
     ctx.strokeStyle = 'rgba(56, 189, 248, 0.20)';
     ctx.strokeRect(roadMargin, trackTop, cw - roadMargin * 2, ch - trackTop);
 
-    ctx.fillStyle = 'rgba(148, 163, 184, 0.4)';
-    ctx.font = '800 10px Inter, sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText('⚡ SLIDE THUMB HERE TO NAVIGATE ⚡', cw / 2, trackTop + 24);
+    const isSplit = (player.buffs.splitSquadTimer ?? 0) > 0;
+    const leftX = player.leftWingX ?? (player.x - 60);
+    const rightX = player.rightWingX ?? (player.x + 60);
 
-    // Soft Directional Ground Glow beneath Squad
-    const squadSpan = Math.min(84, 24 + Math.sqrt(player.count) * 6);
-    const squadGrad = ctx.createRadialGradient(player.x, squadY + 6, 4, player.x, squadY + 6, squadSpan);
-    squadGrad.addColorStop(0, 'rgba(56, 189, 248, 0.22)');
-    squadGrad.addColorStop(1, 'transparent');
-    ctx.fillStyle = squadGrad;
-    ctx.beginPath();
-    ctx.ellipse(player.x, squadY + 6, squadSpan, 14, 0, 0, Math.PI * 2);
-    ctx.fill();
+    if (isSplit) {
+      // Dual-Thumb Navigation Track
+      ctx.fillStyle = '#38bdf8';
+      ctx.font = '900 10.5px Inter, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('👈 LEFT THUMB', cw * 0.25, trackTop + 24);
+      ctx.fillText('RIGHT THUMB 👉', cw * 0.75, trackTop + 24);
 
-    // 11. Render Dynamic Squad Cluster & Specialists (Phase 3)
-    player.members.forEach(m => {
-      const mx = player.x + m.relX;
-      const my = player.y + m.relY;
-
+      // Electric Energy Tether connecting Dual Wings
       ctx.save();
-      ctx.fillStyle = m.color;
+      ctx.strokeStyle = 'rgba(56, 189, 248, 0.45)';
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([4, 4]);
+      ctx.beginPath();
+      ctx.moveTo(leftX, squadY);
+      ctx.lineTo(rightX, squadY);
+      ctx.stroke();
+      ctx.setLineDash([]);
 
-      if (m.type === 'SNIPER') {
-        // Cyan Diamond
-        ctx.beginPath();
-        ctx.moveTo(mx, my - 5);
-        ctx.lineTo(mx + 4, my);
-        ctx.lineTo(mx, my + 5);
-        ctx.lineTo(mx - 4, my);
-        ctx.closePath();
-        ctx.fill();
+      // Dynamic animated electrical arc
+      ctx.strokeStyle = '#38bdf8';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      const midX = (leftX + rightX) / 2;
+      const arcOffset = Math.sin(Date.now() * 0.012) * 7;
+      ctx.moveTo(leftX, squadY);
+      ctx.quadraticCurveTo(midX, squadY + arcOffset, rightX, squadY);
+      ctx.stroke();
 
-        // Forward laser sighting tick
-        ctx.strokeStyle = 'rgba(56, 189, 248, 0.65)';
-        ctx.lineWidth = 1;
+      // Soft directional glow under both wings
+      [leftX, rightX].forEach(wx => {
+        const wingGrad = ctx.createRadialGradient(wx, squadY + 6, 2, wx, squadY + 6, 42);
+        wingGrad.addColorStop(0, 'rgba(56, 189, 248, 0.28)');
+        wingGrad.addColorStop(1, 'transparent');
+        ctx.fillStyle = wingGrad;
         ctx.beginPath();
-        ctx.moveTo(mx, my - 5);
-        ctx.lineTo(mx, my - 13);
-        ctx.stroke();
-      } else if (m.type === 'VANGUARD') {
-        // Orange Chevron
-        ctx.beginPath();
-        ctx.moveTo(mx - 4, my + 4);
-        ctx.lineTo(mx, my - 4);
-        ctx.lineTo(mx + 4, my + 4);
-        ctx.closePath();
+        ctx.ellipse(wx, squadY + 6, 42, 13, 0, 0, Math.PI * 2);
         ctx.fill();
+      });
 
-        // Dual micro-flame nozzles
-        ctx.strokeStyle = '#f97316';
-        ctx.lineWidth = 1.2;
+      // Render members partitioned between Left and Right wings
+      const halfCount = Math.ceil(player.members.length / 2);
+      player.members.forEach((m, idx) => {
+        const atLeft = idx < halfCount;
+        const wx = atLeft ? leftX : rightX;
+        const mx = wx + m.relX * 0.75;
+        const my = player.y + m.relY * 0.75;
+
+        ctx.fillStyle = m.color;
+        if (m.type === 'SNIPER') {
+          ctx.beginPath();
+          ctx.moveTo(mx, my - 5);
+          ctx.lineTo(mx + 4, my);
+          ctx.lineTo(mx, my + 5);
+          ctx.lineTo(mx - 4, my);
+          ctx.closePath();
+          ctx.fill();
+        } else if (m.type === 'VANGUARD') {
+          ctx.beginPath();
+          ctx.moveTo(mx - 4, my + 4);
+          ctx.lineTo(mx, my - 4);
+          ctx.lineTo(mx + 4, my + 4);
+          ctx.closePath();
+          ctx.fill();
+        } else if (m.type === 'MORTAR') {
+          ctx.beginPath();
+          ctx.arc(mx, my, 4, 0, Math.PI * 2);
+          ctx.fill();
+        } else {
+          ctx.beginPath();
+          ctx.arc(mx, my, 3.2, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      });
+
+      // Wing Count Badges
+      const leftTroopCount = Math.ceil(player.count / 2);
+      const rightTroopCount = Math.max(1, Math.floor(player.count / 2));
+      [
+        { x: leftX, count: leftTroopCount, label: 'L' },
+        { x: rightX, count: rightTroopCount, label: 'R' }
+      ].forEach(w => {
+        ctx.fillStyle = '#0f172a';
+        ctx.strokeStyle = '#38bdf8';
+        ctx.lineWidth = 1.4;
         ctx.beginPath();
-        ctx.moveTo(mx - 2, my - 4); ctx.lineTo(mx - 2, my - 8);
-        ctx.moveTo(mx + 2, my - 4); ctx.lineTo(mx + 2, my - 8);
-        ctx.stroke();
-      } else if (m.type === 'MORTAR') {
-        // Yellow Ring Orb
-        ctx.beginPath();
-        ctx.arc(mx, my, 4, 0, Math.PI * 2);
+        ctx.roundRect(w.x - 22, player.y - 28, 44, 18, 5);
         ctx.fill();
-        ctx.strokeStyle = '#ffffff';
-        ctx.lineWidth = 1;
         ctx.stroke();
 
-        // Yellow Targeting Beacon
-        ctx.strokeStyle = '#eab308';
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.moveTo(mx, my - 4);
-        ctx.lineTo(mx, my - 9);
-        ctx.stroke();
-      } else {
-        // Standard Soldier
-        ctx.beginPath();
-        ctx.arc(mx, my, 3.5, 0, Math.PI * 2);
-        ctx.fill();
-      }
+        ctx.fillStyle = '#38bdf8';
+        ctx.font = '900 10.5px "JetBrains Mono", monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText(`${w.label}:${w.count}`, w.x, player.y - 15);
+      });
+
+      // Top Center Dual-Thumb Countdown Badge
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.94)';
+      ctx.strokeStyle = '#38bdf8';
+      ctx.lineWidth = 1.5;
+      const timerW = 160;
+      ctx.beginPath();
+      ctx.roundRect(cw / 2 - timerW / 2, player.y - 58, timerW, 22, 6);
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.fillStyle = '#38bdf8';
+      ctx.font = '900 10.5px "JetBrains Mono", monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText(`⚡ DUAL-THUMB: ${player.buffs.splitSquadTimer.toFixed(1)}s`, cw / 2, player.y - 43);
+
       ctx.restore();
-    });
+    } else {
+      ctx.fillStyle = 'rgba(148, 163, 184, 0.4)';
+      ctx.font = '800 10px Inter, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('⚡ SLIDE THUMB HERE TO NAVIGATE ⚡', cw / 2, trackTop + 24);
+
+      // Soft Directional Ground Glow beneath Squad
+      const squadSpan = Math.min(84, 24 + Math.sqrt(player.count) * 6);
+      const squadGrad = ctx.createRadialGradient(player.x, squadY + 6, 4, player.x, squadY + 6, squadSpan);
+      squadGrad.addColorStop(0, 'rgba(56, 189, 248, 0.22)');
+      squadGrad.addColorStop(1, 'transparent');
+      ctx.fillStyle = squadGrad;
+      ctx.beginPath();
+      ctx.ellipse(player.x, squadY + 6, squadSpan, 14, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // 11. Render Dynamic Squad Cluster & Specialists (Phase 3)
+      player.members.forEach(m => {
+        const mx = player.x + m.relX;
+        const my = player.y + m.relY;
+
+        ctx.save();
+        ctx.fillStyle = m.color;
+
+        if (m.type === 'SNIPER') {
+          // Cyan Diamond
+          ctx.beginPath();
+          ctx.moveTo(mx, my - 5);
+          ctx.lineTo(mx + 4, my);
+          ctx.lineTo(mx, my + 5);
+          ctx.lineTo(mx - 4, my);
+          ctx.closePath();
+          ctx.fill();
+
+          // Forward laser sighting tick
+          ctx.strokeStyle = 'rgba(56, 189, 248, 0.65)';
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(mx, my - 5);
+          ctx.lineTo(mx, my - 13);
+          ctx.stroke();
+        } else if (m.type === 'VANGUARD') {
+          // Orange Chevron
+          ctx.beginPath();
+          ctx.moveTo(mx - 4, my + 4);
+          ctx.lineTo(mx, my - 4);
+          ctx.lineTo(mx + 4, my + 4);
+          ctx.closePath();
+          ctx.fill();
+
+          // Dual micro-flame nozzles
+          ctx.strokeStyle = '#f97316';
+          ctx.lineWidth = 1.2;
+          ctx.beginPath();
+          ctx.moveTo(mx - 2, my - 4); ctx.lineTo(mx - 2, my - 8);
+          ctx.moveTo(mx + 2, my - 4); ctx.lineTo(mx + 2, my - 8);
+          ctx.stroke();
+        } else if (m.type === 'MORTAR') {
+          // Yellow Ring Orb
+          ctx.beginPath();
+          ctx.arc(mx, my, 4, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.strokeStyle = '#ffffff';
+          ctx.lineWidth = 1;
+          ctx.stroke();
+
+          // Yellow Targeting Beacon
+          ctx.strokeStyle = '#eab308';
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(mx, my - 4);
+          ctx.lineTo(mx, my - 9);
+          ctx.stroke();
+        } else {
+          // Standard Soldier
+          ctx.beginPath();
+          ctx.arc(mx, my, 3.5, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.restore();
+      });
+
+      // Floating Squad Count Badge
+      ctx.fillStyle = '#0f172a';
+      ctx.strokeStyle = '#38bdf8';
+      ctx.lineWidth = 1.5;
+      const badgeW = 48;
+      const badgeH = 20;
+      ctx.beginPath();
+      ctx.roundRect(player.x - badgeW / 2, player.y - 28, badgeW, badgeH, 6);
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.fillStyle = '#ffffff';
+      ctx.font = '900 12px "JetBrains Mono", monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText(`${player.count}`, player.x, player.y - 14);
+    }
 
     // Squad Shield Aura
     if (player.shields > 0) {
@@ -832,22 +1021,6 @@ export class GameRenderer {
       ctx.arc(player.x, player.y, 28, 0, Math.PI * 2);
       ctx.stroke();
     }
-
-    // Floating Squad Count Badge
-    ctx.fillStyle = '#0f172a';
-    ctx.strokeStyle = '#38bdf8';
-    ctx.lineWidth = 1.5;
-    const badgeW = 48;
-    const badgeH = 20;
-    ctx.beginPath();
-    ctx.roundRect(player.x - badgeW / 2, player.y - 28, badgeW, badgeH, 6);
-    ctx.fill();
-    ctx.stroke();
-
-    ctx.fillStyle = '#ffffff';
-    ctx.font = '900 12px "JetBrains Mono", monospace';
-    ctx.textAlign = 'center';
-    ctx.fillText(`${player.count}`, player.x, player.y - 14);
 
     // 12. Velocity-Stretched Impact Sparks
     particles.forEach(p => {

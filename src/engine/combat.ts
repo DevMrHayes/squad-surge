@@ -99,45 +99,117 @@ export class CombatEngine {
       const spread = 8.5;
       const startX = -((streamCount - 1) * spread) / 2;
 
-      for (let b = 0; b < streamCount; b++) {
-        const bx = player.x + startX + b * spread;
-        bullets.push({
-          id: Math.random(),
-          x: bx,
-          y: player.y - 12,
-          vx: 0,
-          vy: -680,
-          damage: dmgPerBullet,
-          gateCharge: gateChargePerBullet,
-          radius: 3.5,
-          color: player.buffs.cryoTimer > 0 ? '#67e8f9' : player.buffs.apTimer > 0 ? '#fde047' : '#38bdf8',
-          isCryo: player.buffs.cryoTimer > 0,
-          isBlast: player.buffs.blastTimer > 0,
-          isPierce: player.buffs.apTimer > 0,
-          isFromPlayer: true,
-          ricochetsLeft: 2,
-          active: true,
-        });
-      }
+      const isSplit = (player.buffs.splitSquadTimer ?? 0) > 0;
+      if (isSplit) {
+        const leftX = player.leftWingX ?? (player.x - 60);
+        const rightX = player.rightWingX ?? (player.x + 60);
+        const wingStreams = Math.min(6, Math.max(1, Math.ceil(streamCount / 2)));
+        const wingStartX = -((wingStreams - 1) * spread) / 2;
 
-      // Evolved Laser Weapon (from Sacrifice Altar)
-      if (player.buffs.laserWeapon) {
-        bullets.push({
-          id: Math.random(),
-          x: player.x,
-          y: player.y - 14,
-          vx: 0,
-          vy: -920,
-          damage: dmgPerBullet * 2.8,
-          gateCharge: gateChargePerBullet * 1.5,
-          radius: 6,
-          color: '#c084fc',
-          isPierce: true,
-          isLaser: true,
-          isFromPlayer: true,
-          ricochetsLeft: 2,
-          active: true,
-        });
+        // Left Wing Volley (angled slightly inward)
+        for (let b = 0; b < wingStreams; b++) {
+          bullets.push({
+            id: Math.random(),
+            x: leftX + wingStartX + b * spread,
+            y: player.y - 12,
+            vx: 30,
+            vy: -680,
+            damage: dmgPerBullet * 1.05,
+            gateCharge: gateChargePerBullet,
+            radius: 3.5,
+            color: player.buffs.cryoTimer > 0 ? '#67e8f9' : player.buffs.apTimer > 0 ? '#fde047' : '#38bdf8',
+            isCryo: player.buffs.cryoTimer > 0,
+            isBlast: player.buffs.blastTimer > 0,
+            isPierce: player.buffs.apTimer > 0,
+            isFromPlayer: true,
+            ricochetsLeft: 2,
+            active: true,
+          });
+        }
+
+        // Right Wing Volley (angled slightly inward)
+        for (let b = 0; b < wingStreams; b++) {
+          bullets.push({
+            id: Math.random(),
+            x: rightX + wingStartX + b * spread,
+            y: player.y - 12,
+            vx: -30,
+            vy: -680,
+            damage: dmgPerBullet * 1.05,
+            gateCharge: gateChargePerBullet,
+            radius: 3.5,
+            color: player.buffs.cryoTimer > 0 ? '#67e8f9' : player.buffs.apTimer > 0 ? '#fde047' : '#38bdf8',
+            isCryo: player.buffs.cryoTimer > 0,
+            isBlast: player.buffs.blastTimer > 0,
+            isPierce: player.buffs.apTimer > 0,
+            isFromPlayer: true,
+            ricochetsLeft: 2,
+            active: true,
+          });
+        }
+
+        // Dual Laser if unlocked
+        if (player.buffs.laserWeapon) {
+          [leftX, rightX].forEach(wx => {
+            bullets.push({
+              id: Math.random(),
+              x: wx,
+              y: player.y - 14,
+              vx: 0,
+              vy: -920,
+              damage: dmgPerBullet * 2.8,
+              gateCharge: gateChargePerBullet * 1.5,
+              radius: 6,
+              color: '#c084fc',
+              isPierce: true,
+              isLaser: true,
+              isFromPlayer: true,
+              ricochetsLeft: 2,
+              active: true,
+            });
+          });
+        }
+      } else {
+        for (let b = 0; b < streamCount; b++) {
+          const bx = player.x + startX + b * spread;
+          bullets.push({
+            id: Math.random(),
+            x: bx,
+            y: player.y - 12,
+            vx: 0,
+            vy: -680,
+            damage: dmgPerBullet,
+            gateCharge: gateChargePerBullet,
+            radius: 3.5,
+            color: player.buffs.cryoTimer > 0 ? '#67e8f9' : player.buffs.apTimer > 0 ? '#fde047' : '#38bdf8',
+            isCryo: player.buffs.cryoTimer > 0,
+            isBlast: player.buffs.blastTimer > 0,
+            isPierce: player.buffs.apTimer > 0,
+            isFromPlayer: true,
+            ricochetsLeft: 2,
+            active: true,
+          });
+        }
+
+        // Evolved Laser Weapon (from Sacrifice Altar)
+        if (player.buffs.laserWeapon) {
+          bullets.push({
+            id: Math.random(),
+            x: player.x,
+            y: player.y - 14,
+            vx: 0,
+            vy: -920,
+            damage: dmgPerBullet * 2.8,
+            gateCharge: gateChargePerBullet * 1.5,
+            radius: 6,
+            color: '#c084fc',
+            isPierce: true,
+            isLaser: true,
+            isFromPlayer: true,
+            ricochetsLeft: 2,
+            active: true,
+          });
+        }
       }
 
       // Evolved Homing Micro-Missiles
@@ -252,7 +324,8 @@ export class CombatEngine {
     enemies: Enemy[], 
     particles: Particle[],
     addTrauma: (amt: number) => void,
-    shockwaves?: Shockwave[]
+    shockwaves?: Shockwave[],
+    cw: number = 380
   ): void {
     for (let i = bullets.length - 1; i >= 0; i--) {
       const b = bullets[i];
@@ -313,8 +386,8 @@ export class CombatEngine {
           b.vx = Math.abs(b.vx);
           b.ricochetsLeft = (b.ricochetsLeft || 1) - 1;
           this.createExplosionParticles(b.x, b.y, '#fde047', particles, 4, true);
-        } else if (b.x >= 362 && b.vx > 0) {
-          b.x = 360;
+        } else if (b.x >= cw - 18 && b.vx > 0) {
+          b.x = cw - 20;
           b.vx = -Math.abs(b.vx);
           b.ricochetsLeft = (b.ricochetsLeft || 1) - 1;
           this.createExplosionParticles(b.x, b.y, '#fde047', particles, 4, true);
@@ -322,7 +395,7 @@ export class CombatEngine {
       }
 
       // Bullets deactivate upon reaching visible highway border (no off-screen travel)
-      if (b.y < 20 || b.y > 900 || b.x < -20 || b.x > 450) {
+      if (b.y < 20 || b.y > 900 || b.x < -20 || b.x > cw + 60) {
         b.active = false;
       }
     }
@@ -385,6 +458,112 @@ export class CombatEngine {
           }
         });
       }
+
+      // Central Diamond Beam Splitter: Splits incoming bullets into dual outward 45° diagonal beams (+40% overcharge)
+      if (obs.type === 'BEAM_SPLITTER') {
+        const hw = (obs.width || 54) / 2;
+        const hh = (obs.height || 54) / 2;
+        bullets.forEach(b => {
+          if (!b.active || !b.isFromPlayer || b.vy >= 0) return;
+          const collides = 
+            b.x >= obs.x - hw && 
+            b.x <= obs.x + hw && 
+            b.y >= obs.y - hh && 
+            b.y <= obs.y + hh;
+
+          if (collides) {
+            b.active = false; // Original bullet absorbed into diamond splitter
+            const overchargedDmg = b.damage * 1.4; // +40% overcharge damage
+            const overchargedCharge = (b.gateCharge || 1.0) * 1.4;
+
+            // Spawn Left Outward 45° Diagonal Beam
+            bullets.push({
+              id: Math.random(),
+              x: obs.x - 10,
+              y: obs.y - 10,
+              vx: -420,
+              vy: -420,
+              damage: overchargedDmg,
+              gateCharge: overchargedCharge,
+              radius: 4.5,
+              color: '#38bdf8',
+              isPierce: true,
+              isFromPlayer: true,
+              ricochetsLeft: 2,
+              active: true,
+            });
+
+            // Spawn Right Outward 45° Diagonal Beam
+            bullets.push({
+              id: Math.random(),
+              x: obs.x + 10,
+              y: obs.y - 10,
+              vx: 420,
+              vy: -420,
+              damage: overchargedDmg,
+              gateCharge: overchargedCharge,
+              radius: 4.5,
+              color: '#38bdf8',
+              isPierce: true,
+              isFromPlayer: true,
+              ricochetsLeft: 2,
+              active: true,
+            });
+
+            if (particles) {
+              this.createExplosionParticles(obs.x, obs.y, '#38bdf8', particles, 8, true);
+            }
+          }
+        });
+      }
+    });
+  }
+
+  public static handleEnemyObstacleCollisions(
+    enemies: Enemy[],
+    obstacles: FieldObstacle[],
+    cw: number = 380
+  ): void {
+    enemies.forEach(e => {
+      if (!e.active || e.y < 20 || e.y > 800) return;
+
+      obstacles.forEach(obs => {
+        if (!obs.active) return;
+
+        // Central Diamond Beam Splitter collision: enemies bump against the diamond and funnel into open lanes
+        if (obs.type === 'BEAM_SPLITTER') {
+          const hw = (obs.width || 54) / 2;
+          const hh = (obs.height || 54) / 2;
+          const inY = Math.abs(e.y - obs.y) <= hh + e.r;
+          const inX = Math.abs(e.x - obs.x) <= hw + e.r;
+
+          if (inY && inX) {
+            if (e.x < obs.x) {
+              e.x = Math.max(30, obs.x - hw - e.r - 2);
+            } else {
+              e.x = Math.min(cw - 30, obs.x + hw + e.r + 2);
+            }
+          }
+        } else if (obs.type === 'PRISM_MIRROR') {
+          const isLeft = obs.lane === 'LEFT' || obs.x < cw / 2 || obs.angleDeg > 0;
+          const halfH = (obs.height || 76) / 2;
+          const inY = Math.abs(e.y - obs.y) <= halfH + e.r;
+
+          if (inY) {
+            if (isLeft) {
+              const wallBumperRight = (obs.x || 54) + (obs.width || 78) / 2;
+              if (e.x < wallBumperRight + e.r) {
+                e.x = wallBumperRight + e.r + 2;
+              }
+            } else {
+              const wallBumperLeft = (obs.x || (cw - 54)) - (obs.width || 78) / 2;
+              if (e.x > wallBumperLeft - e.r) {
+                e.x = wallBumperLeft - e.r - 2;
+              }
+            }
+          }
+        }
+      });
     });
   }
 
