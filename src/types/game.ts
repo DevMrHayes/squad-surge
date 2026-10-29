@@ -363,6 +363,8 @@ export interface SaveData {
     gamesPlayed: number;
     victories: number;
     highScore?: number;
+    endlessBestTime?: number;
+    endlessBestLevel?: number;
   };
   achievements: Record<string, boolean>;
   userId?: string;

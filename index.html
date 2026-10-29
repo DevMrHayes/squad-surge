@@ -101,6 +101,18 @@
 
       <!-- PRE-LEVEL BRIEFING OVERLAY (Disappears immediately when combat starts) -->
       <div id="startOverlay" class="absolute inset-0 z-10 flex flex-col justify-between p-3.5 bg-slate-950/80 backdrop-blur-[4px]">
+        <!-- Game Mode Segmented Switcher -->
+        <div class="flex items-center gap-1.5 p-1 bg-slate-900/95 border border-slate-800 rounded-2xl mb-1 shrink-0 shadow-md">
+          <button id="tabModeCampaign" class="flex-1 py-1.5 px-2 rounded-xl text-xs font-black tracking-wide uppercase transition-all bg-sky-500 text-slate-950 shadow-sm flex items-center justify-center gap-1">
+            <span>🛡️</span>
+            <span>Campaign</span>
+          </button>
+          <button id="tabModeEndless" class="flex-1 py-1.5 px-2 rounded-xl text-xs font-black tracking-wide uppercase transition-all text-slate-400 hover:text-white flex items-center justify-center gap-1">
+            <span>♾️</span>
+            <span>Endless Survival</span>
+          </button>
+        </div>
+
         <!-- Top Mission Intelligence Card -->
         <div class="bg-slate-900/95 border border-slate-800 rounded-2xl p-3.5 shadow-xl">
           <div class="flex items-center justify-between mb-1.5">
@@ -197,6 +209,12 @@
           <button id="btnCloseMap" class="btn-tap w-8 h-8 rounded-full bg-slate-900 border border-slate-800 text-slate-300 text-xs">✕</button>
         </div>
         <div class="flex-1 overflow-y-auto py-3">
+          <div class="pb-3">
+            <button id="btnLaunchEndlessFromMap" class="btn-tap w-full py-2.5 rounded-xl bg-gradient-to-r from-sky-400 to-indigo-500 text-slate-950 font-black text-xs uppercase flex items-center justify-center gap-1.5 shadow-md shadow-sky-400/20">
+              <span>♾️</span>
+              <span>Launch Endless Survival Mode</span>
+            </button>
+          </div>
           <div id="levelGrid" class="grid grid-cols-5 gap-2"></div>
         </div>
       </div>
@@ -257,6 +275,10 @@
             <div class="p-2.5 rounded-xl bg-slate-900 border border-slate-800">
               <div class="text-[10px] font-bold text-slate-400">RICOCHET KILLS</div>
               <div id="statRicochet" class="text-base font-black font-mono-num text-amber-400">0</div>
+            </div>
+            <div class="p-2.5 rounded-xl bg-slate-900 border border-slate-800">
+              <div class="text-[10px] font-bold text-slate-400">BEST SURVIVAL</div>
+              <div id="statEndlessTime" class="text-base font-black font-mono-num text-emerald-400">00:00.0</div>
             </div>
           </div>
 

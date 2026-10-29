@@ -15,8 +15,10 @@ import {
   CrateQueueItem,
   EnemyScheduleItem,
   ObstacleQueueItem,
-  SaveData 
+  SaveData,
+  SectorId
 } from '../types/game';
+import { SECTOR_BIOMES } from '../constants/biomes';
 import { WaveGenerator } from './waveGenerator';
 import { CombatEngine } from './combat';
 import { GameRenderer } from './renderer';
@@ -24,6 +26,14 @@ import { storage } from '../services/storage';
 import { sfx } from '../services/audio';
 
 export type GameMode = 'READY' | 'PLAYING' | 'PAUSED' | 'VICTORY' | 'DEFEAT';
+
+export interface GameOverDetails {
+  isEndless?: boolean;
+  timeSurvived?: number;
+  threatLevel?: number;
+  isNewRecord?: boolean;
+  prevBest?: number;
+}
 
 export class GameLoop {
   private canvas: HTMLCanvasElement;
@@ -33,6 +43,10 @@ export class GameLoop {
 
   public mode: GameMode = 'READY';
   public currentLevel: number = 1;
+  public isEndless: boolean = false;
+  public endlessThreatLevel: number = 1;
+  public endlessTimeSurvived: number = 0;
+  private endlessNextCursorTime: number = 0;
   public plan: LevelPlan;
   public elapsed: number = 0;
   public trauma: number = 0;
@@ -63,14 +77,14 @@ export class GameLoop {
   private lastTS: number = 0;
   private animFrameId: number | null = null;
 
-  private onHUDUpdate?: (level: number, left: number, total: number, coins: number) => void;
-  private onGameOver?: (won: boolean, coinsEarned: number, reason?: string) => void;
+  private onHUDUpdate?: (level: number, left: number, total: number, coins: number, isEndless?: boolean, endlessTime?: number, endlessThreat?: number) => void;
+  private onGameOver?: (won: boolean, coinsEarned: number, reason?: string, details?: GameOverDetails) => void;
 
   constructor(
     canvas: HTMLCanvasElement, 
     callbacks: {
-      onHUDUpdate: (level: number, left: number, total: number, coins: number) => void;
-      onGameOver: (won: boolean, coinsEarned: number, reason?: string) => void;
+      onHUDUpdate: (level: number, left: number, total: number, coins: number, isEndless?: boolean, endlessTime?: number, endlessThreat?: number) => void;
+      onGameOver: (won: boolean, coinsEarned: number, reason?: string, details?: GameOverDetails) => void;
     }
   ) {
     this.canvas = canvas;
@@ -132,14 +146,24 @@ export class GameLoop {
     }
   }
 
-  public initLevel(lvl: number): void {
-    this.currentLevel = Math.max(1, Math.min(100, lvl));
-    this.plan = WaveGenerator.generate(this.currentLevel, this.cw);
+  public initLevel(lvl: number, isEndless: boolean = false): void {
+    this.isEndless = isEndless;
     this.elapsed = 0;
     this.trauma = 0;
     this.enemiesKilled = 0;
     this.sessionCoinsEarned = 0;
     this.sessionScore = 0;
+
+    if (isEndless) {
+      this.currentLevel = 1;
+      this.endlessThreatLevel = 1;
+      this.endlessTimeSurvived = 0;
+      this.plan = WaveGenerator.generateEndlessInitialPlan(this.cw);
+      this.endlessNextCursorTime = 11.15;
+    } else {
+      this.currentLevel = Math.max(1, Math.min(100, lvl));
+      this.plan = WaveGenerator.generate(this.currentLevel, this.cw);
+    }
 
     this.player = this.createDefaultPlayer();
     this.targetX = this.cw / 2;
@@ -374,21 +398,48 @@ export class GameLoop {
     CombatEngine.updateSquadFormation(this.player);
 
     if (this.player.count <= 0) {
-      this.mode = 'DEFEAT';
-      sfx.pauseBGM();
-      const consolation = Math.round(this.plan.coinReward * 0.25);
-      storage.recordLoss(consolation);
-      if (this.onGameOver) this.onGameOver(false, consolation, 'All soldiers in your squad were eliminated!');
+      this.triggerDefeat('All soldiers in your squad were eliminated!');
       return true;
     }
     return false;
   }
 
+  private triggerDefeat(reason: string): void {
+    this.mode = 'DEFEAT';
+    sfx.pauseBGM();
+    sfx.playLose();
+
+    if (this.isEndless) {
+      const res = storage.recordEndlessRun(this.endlessTimeSurvived, this.endlessThreatLevel, this.sessionCoinsEarned);
+      if (this.onGameOver) {
+        this.onGameOver(false, this.sessionCoinsEarned, reason, {
+          isEndless: true,
+          timeSurvived: this.endlessTimeSurvived,
+          threatLevel: this.endlessThreatLevel,
+          isNewRecord: res.isNewRecord,
+          prevBest: res.prevBest,
+        });
+      }
+    } else {
+      const consolation = Math.round(this.plan.coinReward * 0.25);
+      storage.recordLoss(consolation);
+      if (this.onGameOver) this.onGameOver(false, consolation, reason);
+    }
+  }
+
   private notifyHUD(): void {
     if (this.onHUDUpdate) {
       const save = storage.getSave();
-      const remaining = Math.max(0, this.plan.totalEnemies - this.enemiesKilled);
-      this.onHUDUpdate(this.currentLevel, remaining, this.plan.totalEnemies, save.coins);
+      const remaining = this.isEndless ? 0 : Math.max(0, this.plan.totalEnemies - this.enemiesKilled);
+      this.onHUDUpdate(
+        this.currentLevel, 
+        remaining, 
+        this.isEndless ? 0 : this.plan.totalEnemies, 
+        save.coins,
+        this.isEndless,
+        this.endlessTimeSurvived,
+        this.endlessThreatLevel
+      );
     }
   }
 
@@ -396,6 +447,31 @@ export class GameLoop {
     if (this.mode !== 'PLAYING') return;
 
     this.elapsed += dt;
+
+    if (this.isEndless) {
+      this.endlessTimeSurvived += dt;
+      const targetThreat = Math.floor(this.endlessTimeSurvived / 20) + 1;
+      if (targetThreat > this.endlessThreatLevel) {
+        this.endlessThreatLevel = targetThreat;
+        const sId = Math.min(5, Math.ceil(targetThreat / 4)) as SectorId;
+        this.plan.biome = SECTOR_BIOMES[sId];
+        this.spawnFloatText(this.cw / 2, this.ch * 0.28, `⚡ THREAT LEVEL ${targetThreat}!`, '#fde047');
+        sfx.playGateCharge();
+        this.trauma = Math.min(1.0, this.trauma + 0.35);
+      }
+      this.plan.scrollSpeed = Math.min(115, 74 + this.endlessThreatLevel * 0.7);
+
+      // Continuous endless queue refill
+      if (this.gateQueue.length < 3 || this.enemySchedule.length < 8) {
+        const chunk = WaveGenerator.generateEndlessChunk(this.endlessThreatLevel, this.endlessNextCursorTime, this.cw);
+        this.gateQueue.push(...chunk.gateQueue);
+        this.crateQueue.push(...chunk.crateQueue);
+        this.enemySchedule.push(...chunk.enemySchedule);
+        this.obstacleQueue.push(...chunk.obstacleQueue);
+        this.endlessNextCursorTime = chunk.nextCursorTime;
+      }
+      this.notifyHUD();
+    }
 
     // Camera trauma decay
     if (this.trauma > 0) {
@@ -655,12 +731,7 @@ export class GameLoop {
       // Defensive Perimeter Breach Check
       if (e.y + e.r >= squadY - 4) {
         if (e.isBoss) {
-          this.mode = 'DEFEAT';
-          sfx.pauseBGM();
-          sfx.playLose();
-          const consolation = Math.round(this.plan.coinReward * 0.25);
-          storage.recordLoss(consolation);
-          if (this.onGameOver) this.onGameOver(false, consolation, `${e.name || e.type} breached your defensive perimeter!`);
+          this.triggerDefeat(`${e.name || e.type} breached your defensive perimeter!`);
           return;
         }
 
@@ -680,12 +751,7 @@ export class GameLoop {
           this.enemies.splice(i, 1);
           this.enemiesKilled++;
         } else {
-          this.mode = 'DEFEAT';
-          sfx.pauseBGM();
-          sfx.playLose();
-          const consolation = Math.round(this.plan.coinReward * 0.25);
-          storage.recordLoss(consolation);
-          if (this.onGameOver) this.onGameOver(false, consolation, 'Perimeter overrun!');
+          this.triggerDefeat('Perimeter overrun!');
           return;
         }
       }
@@ -707,25 +773,27 @@ export class GameLoop {
       if (em.y > this.ch + 20) this.enemyMortars.splice(i, 1);
     }
 
-    // 10. Win Condition
-    const remainingEnemies = this.plan.totalEnemies - this.enemiesKilled;
-    if (remainingEnemies <= 0 && this.enemySchedule.length === 0 && this.enemies.length === 0) {
-      this.mode = 'VICTORY';
-      sfx.pauseBGM();
-      sfx.playWin();
+    // 10. Win Condition (Campaign Mode only)
+    if (!this.isEndless) {
+      const remainingEnemies = this.plan.totalEnemies - this.enemiesKilled;
+      if (remainingEnemies <= 0 && this.enemySchedule.length === 0 && this.enemies.length === 0) {
+        this.mode = 'VICTORY';
+        sfx.pauseBGM();
+        sfx.playWin();
 
-      const survivalBonus = Math.max(0, this.player.count * 2);
-      const totalReward = this.plan.coinReward + survivalBonus;
-      this.sessionCoinsEarned += totalReward;
-      this.sessionScore += 2500 + (this.player.count * 25);
+        const survivalBonus = Math.max(0, this.player.count * 2);
+        const totalReward = this.plan.coinReward + survivalBonus;
+        this.sessionCoinsEarned += totalReward;
+        this.sessionScore += 2500 + (this.player.count * 25);
 
-      storage.recordWin(this.currentLevel, totalReward);
-      const save = storage.getSave();
-      save.stats.highScore = Math.max(save.stats.highScore || 0, this.sessionScore);
-      storage.saveLocal();
+        storage.recordWin(this.currentLevel, totalReward);
+        const save = storage.getSave();
+        save.stats.highScore = Math.max(save.stats.highScore || 0, this.sessionScore);
+        storage.saveLocal();
 
-      if (this.onGameOver) {
-        this.onGameOver(true, totalReward, `Sector Secured! Base: +${this.plan.coinReward} 🪙 | Squad Survival (${this.player.count} 👥): +${survivalBonus} 🪙`);
+        if (this.onGameOver) {
+          this.onGameOver(true, totalReward, `Sector Secured! Base: +${this.plan.coinReward} 🪙 | Squad Survival (${this.player.count} 👥): +${survivalBonus} 🪙`);
+        }
       }
     }
 

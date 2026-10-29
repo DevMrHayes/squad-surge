@@ -27,6 +27,8 @@ export const DEFAULT_SAVE: SaveData = {
     gamesPlayed: 0,
     victories: 0,
     highScore: 0,
+    endlessBestTime: 0,
+    endlessBestLevel: 1,
   },
   achievements: {},
 };
@@ -146,6 +148,20 @@ export class StorageManager {
     this.currentSave.coins += coinsEarned;
     this.currentSave.stats.gamesPlayed += 1;
     this.saveLocal();
+  }
+
+  public recordEndlessRun(timeSurvived: number, threatLevel: number, coinsEarned: number): { isNewRecord: boolean; prevBest: number } {
+    this.currentSave.coins += coinsEarned;
+    this.currentSave.stats.gamesPlayed += 1;
+    const prevBest = this.currentSave.stats.endlessBestTime || 0;
+    const isNewRecord = timeSurvived > prevBest;
+    if (isNewRecord) {
+      this.currentSave.stats.endlessBestTime = Math.round(timeSurvived * 10) / 10;
+      this.currentSave.stats.endlessBestLevel = Math.max(this.currentSave.stats.endlessBestLevel || 1, threatLevel);
+      this.currentSave.stats.highScore = Math.max(this.currentSave.stats.highScore || 0, Math.round(timeSurvived * 100));
+    }
+    this.saveLocal();
+    return { isNewRecord, prevBest };
   }
 
   public unlockAchievement(id: string, reward: number): boolean {

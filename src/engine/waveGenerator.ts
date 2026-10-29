@@ -757,4 +757,295 @@ export class WaveGenerator {
 
     return enemy;
   }
+
+  public static generateEndlessInitialPlan(cw: number = 380): LevelPlan {
+    const biome = SECTOR_BIOMES[1];
+    const initialChunk = this.generateEndlessChunk(1, 0.15, cw);
+    const secondChunk = this.generateEndlessChunk(1, initialChunk.nextCursorTime, cw);
+
+    return {
+      level: 1,
+      sector: 1,
+      biome,
+      archetype: {
+        id: 'SWARM_INFILTRATION',
+        badge: '♾️ ENDLESS SURVIVAL',
+        badgeColor: '#38bdf8',
+        title: 'Infinite Highway Survival',
+        advisory: 'Enemies and obstacles scale endlessly. Hold the line as long as possible!',
+        featuredBuff: 'DYNAMIC SCALE'
+      },
+      tier: 1,
+      isBossLevel: false,
+      isTitanLevel: false,
+      recommendedPower: 4,
+      scrollSpeed: 74,
+      totalEnemies: 99999,
+      coinReward: 0,
+      gateQueue: [...initialChunk.gateQueue, ...secondChunk.gateQueue],
+      crateQueue: [...initialChunk.crateQueue, ...secondChunk.crateQueue],
+      enemySchedule: [...initialChunk.enemySchedule, ...secondChunk.enemySchedule],
+      obstacleQueue: [...initialChunk.obstacleQueue, ...secondChunk.obstacleQueue],
+    };
+  }
+
+  public static generateEndlessChunk(
+    threatLevel: number,
+    startTime: number,
+    cw: number = 380
+  ): {
+    gateQueue: GateQueueItem[];
+    crateQueue: CrateQueueItem[];
+    enemySchedule: EnemyScheduleItem[];
+    obstacleQueue: ObstacleQueueItem[];
+    nextCursorTime: number;
+  } {
+    const gateQueue: GateQueueItem[] = [];
+    const crateQueue: CrateQueueItem[] = [];
+    const enemySchedule: EnemyScheduleItem[] = [];
+    const obstacleQueue: ObstacleQueueItem[] = [];
+
+    const baseEnemyHP = Math.round(16 + Math.pow(threatLevel, 1.28) * 3.6);
+    const maxAddCap = Math.min(32, 6 + Math.floor(threatLevel * 0.5));
+    const hitsPerIncrement = Math.min(18, 5 + Math.floor(threatLevel * 0.35));
+    const greedLane = (threatLevel + Math.floor(startTime)) % 2;
+    const threatLane = 1 - greedLane;
+    const pairId = Math.floor(startTime * 1000) + threatLevel;
+
+    // 1. Choice Gate Dilemma
+    const waveVariant = threatLevel % 4;
+    if (waveVariant === 0) {
+      // Locked Multiplier vs Charge Add
+      const lockHits = Math.min(36, Math.round(10 + threatLevel * 1.1));
+      gateQueue.push({
+        spawnTime: startTime,
+        lane: greedLane,
+        kind: 'LOCKED_MULT',
+        val: 2,
+        minVal: 0,
+        maxVal: 2,
+        label: '🔒 x2 SQUAD',
+        color: '#10b981',
+        lockHitsRemaining: lockHits,
+        lockHitsMax: lockHits,
+        pairId,
+      });
+      gateQueue.push({
+        spawnTime: startTime,
+        lane: threatLane,
+        kind: 'CHARGE_ADD',
+        val: 2,
+        minVal: 0,
+        maxVal: maxAddCap,
+        hitsPerStep: hitsPerIncrement,
+        pairId,
+      });
+    } else if (waveVariant === 1) {
+      // Tactical Buff Gate vs Hazard Neutralization
+      const buffs: ('AP' | 'CRYO' | 'BLAST' | 'FIRERATE')[] = ['AP', 'CRYO', 'BLAST', 'FIRERATE'];
+      const buffType = buffs[threatLevel % buffs.length];
+      const label = buffType === 'AP' ? '⚡ AP ROUNDS (2.5x vs 🛡️)'
+                  : buffType === 'CRYO' ? '❄️ CRYO SLOW (-45% SPD)'
+                  : buffType === 'BLAST' ? '💥 BLAST SPLASH AoE'
+                  : '🔥 FIRE RATE +25%';
+      const color = buffType === 'AP' ? '#fde047' : buffType === 'CRYO' ? '#22d3ee' : buffType === 'BLAST' ? '#fb923c' : '#f43f5e';
+      const lockHits = Math.min(30, Math.round(8 + threatLevel * 0.9));
+
+      gateQueue.push({
+        spawnTime: startTime,
+        lane: greedLane,
+        kind: 'BUFF_GATE',
+        boostType: buffType,
+        label,
+        color,
+        minVal: 0,
+        maxVal: 1,
+        lockHitsRemaining: lockHits,
+        lockHitsMax: lockHits,
+        pairId,
+      });
+      const hazVal = -(2 + Math.floor(threatLevel * 0.2));
+      gateQueue.push({
+        spawnTime: startTime,
+        lane: threatLane,
+        kind: 'HAZARD',
+        val: hazVal,
+        minVal: hazVal,
+        maxVal: 0,
+        hitsPerStep: Math.min(6, 4 + Math.floor(threatLevel * 0.15)),
+        pairId,
+      });
+    } else if (waveVariant === 2) {
+      // Altar vs Hazard Neutralization
+      gateQueue.push({
+        spawnTime: startTime,
+        lane: greedLane,
+        kind: 'ALTAR',
+        val: 0,
+        minVal: 0,
+        maxVal: 0,
+        hitsPerStep: 4,
+        altarSacrificeCost: Math.min(18, 6 + Math.floor(threatLevel * 0.2)),
+        altarWeaponReward: threatLevel % 2 === 0 ? 'laserWeapon' : 'homingMissiles',
+        pairId,
+      });
+      const hazVal = -(2 + Math.floor(threatLevel * 0.22));
+      gateQueue.push({
+        spawnTime: startTime,
+        lane: threatLane,
+        kind: 'HAZARD',
+        val: hazVal,
+        minVal: hazVal,
+        maxVal: 0,
+        hitsPerStep: Math.min(6, 4 + Math.floor(threatLevel * 0.15)),
+        pairId,
+      });
+    } else {
+      // Standard Charge Add (+3 to +maxAddCap) vs Hazard
+      const startVal = Math.max(1, Math.min(4, 1 + Math.floor(threatLevel * 0.15)));
+      gateQueue.push({
+        spawnTime: startTime,
+        lane: greedLane,
+        kind: 'CHARGE_ADD',
+        val: startVal,
+        minVal: 0,
+        maxVal: maxAddCap,
+        hitsPerStep: hitsPerIncrement,
+        pairId,
+      });
+      const hazVal = -(1 + Math.floor(threatLevel * 0.2));
+      gateQueue.push({
+        spawnTime: startTime,
+        lane: threatLane,
+        kind: 'HAZARD',
+        val: hazVal,
+        minVal: hazVal,
+        maxVal: 0,
+        hitsPerStep: Math.min(6, 4 + Math.floor(threatLevel * 0.15)),
+        pairId,
+      });
+    }
+
+    // 2. Obstacles: Speed Strips, Hazard Strips, or Ricochet Prism Mirrors
+    if (threatLevel >= 2) {
+      const isPrism = threatLevel >= 3 && Math.random() < 0.55;
+      if (isPrism) {
+        obstacleQueue.push({
+          spawnTime: startTime + 0.85,
+          type: 'PRISM_MIRROR',
+          lane: greedLane === 0 ? 'LEFT' : 'RIGHT',
+          angleDeg: greedLane === 0 ? 45 : -45,
+        });
+      } else {
+        obstacleQueue.push({
+          spawnTime: startTime + 0.85,
+          type: threatLevel % 2 === 0 ? 'SPEED_STRIP' : 'HAZARD_STRIP',
+          lane: threatLane === 0 ? 'LEFT' : 'RIGHT',
+          angleDeg: 0,
+          overclockRate: 1.5,
+          dragFactor: 0.65,
+        });
+      }
+    }
+
+    // 3. Armory Crate (Armor & Specialist Drops)
+    const crateLane = (threatLevel + Math.floor(startTime * 2)) % 3;
+    const crateHP = Math.round(baseEnemyHP * (2.1 + threatLevel * 0.15));
+    const crateBoosts: ('AP' | 'VANGUARD' | 'SNIPER' | 'MORTAR')[] = ['AP', 'VANGUARD', 'SNIPER', 'MORTAR'];
+    const cBoost = crateBoosts[threatLevel % crateBoosts.length];
+    const cLabel = cBoost === 'AP' ? '⚡ AP ROUNDS (2.5x vs 🛡️)'
+                 : cBoost === 'VANGUARD' ? '⚡ +2 VANGUARD SPECS'
+                 : cBoost === 'SNIPER' ? '💎 +2 SNIPER SPECS'
+                 : '🟡 +1 EMP MORTAR SPEC';
+    const cColor = cBoost === 'AP' ? '#fde047' : cBoost === 'VANGUARD' ? '#f97316' : cBoost === 'SNIPER' ? '#06b6d4' : '#eab308';
+    crateQueue.push({
+      spawnTime: startTime + 1.35,
+      lane3: crateLane,
+      hp: crateHP,
+      maxHp: crateHP,
+      boostType: cBoost,
+      label: cLabel,
+      color: cColor,
+    });
+
+    // 4. Enemy Waves (Marching Behind Gates & Flanking)
+    const runnerCount = Math.min(5, 2 + Math.floor(threatLevel * 0.3));
+    for (let r = 0; r < runnerCount; r++) {
+      const eHp = Math.round(baseEnemyHP * 0.95);
+      enemySchedule.push({
+        spawnTime: startTime + 0.45 + r * 0.30,
+        xNorm: 0.15 + (r / Math.max(1, runnerCount - 1)) * 0.70,
+        kind: r % 2 === 0 ? 'RUNNER' : 'SPRINTER',
+        hp: eHp,
+        maxHp: eHp,
+        speedMult: r % 2 === 0 ? 1.15 : 1.65,
+      });
+    }
+
+    // Flanking Sprinters
+    const sprinterCount = Math.min(4, 1 + Math.floor(threatLevel * 0.25));
+    for (let s = 0; s < sprinterCount; s++) {
+      const sHp = Math.round(baseEnemyHP * 0.75);
+      enemySchedule.push({
+        spawnTime: startTime + 1.45 + s * 0.45,
+        xNorm: threatLane === 0 ? 0.25 : 0.75,
+        kind: 'SPRINTER',
+        hp: sHp,
+        maxHp: sHp,
+        speedMult: 1.70,
+      });
+    }
+
+    // Heavy Assault Formation
+    const isBossWave = threatLevel % 5 === 0 && startTime > 15;
+    if (isBossWave) {
+      const isTitan = threatLevel % 10 === 0;
+      const bossHp = Math.round(baseEnemyHP * (isTitan ? 8.5 : 5.5));
+      enemySchedule.push({
+        spawnTime: startTime + 2.4,
+        xNorm: 0.50,
+        kind: isTitan ? 'TITAN' : 'WARDEN',
+        name: isTitan ? `TITAN OMEGA (THREAT ${threatLevel})` : `WARDEN PRIME (THREAT ${threatLevel})`,
+        hp: bossHp,
+        maxHp: bossHp,
+        speedMult: 0.85,
+      });
+    } else {
+      // Brutes & Shield Bearers
+      const heavyCount = Math.min(3, 1 + Math.floor(threatLevel * 0.2));
+      for (let h = 0; h < heavyCount; h++) {
+        const isShield = threatLevel >= 4 && h === 0;
+        const bHp = Math.round(baseEnemyHP * (isShield ? 1.5 : 2.0));
+        enemySchedule.push({
+          spawnTime: startTime + 2.0 + h * 0.4,
+          xNorm: 0.25 + h * 0.25,
+          kind: isShield ? 'SHIELD_BEARER' : 'BRUTE',
+          hp: bHp,
+          maxHp: bHp,
+          speedMult: 0.95,
+        });
+      }
+
+      // Shooters / Artillery
+      if (threatLevel >= 3) {
+        const shHp = Math.round(baseEnemyHP * 1.3);
+        enemySchedule.push({
+          spawnTime: startTime + 2.8,
+          xNorm: (threatLevel % 2 === 0 ? 0.22 : 0.78),
+          kind: 'SHOOTER',
+          hp: shHp,
+          maxHp: shHp,
+          speedMult: 0.92,
+        });
+      }
+    }
+
+    return {
+      gateQueue,
+      crateQueue,
+      enemySchedule,
+      obstacleQueue,
+      nextCursorTime: startTime + 5.5,
+    };
+  }
 }

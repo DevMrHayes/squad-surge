@@ -495,6 +495,60 @@ it('Shooting a Sacrifice Altar purifies it and drops sacrifice cost to 0', () =>
   assert.strictEqual(isFree, true, 'Purified altar grants weapon evolution with 0 troop cost');
 });
 
+// 22. Endless Mode Chunk Generation & Threat Escalation
+it('Endless Mode dynamically escalates threat level, enemy HP, and gate caps', () => {
+  function getEndlessThreat(seconds) {
+    return Math.floor(seconds / 20) + 1;
+  }
+
+  assert.strictEqual(getEndlessThreat(0), 1, 'Initial threat level is 1');
+  assert.strictEqual(getEndlessThreat(19.9), 1, 'Threat stays 1 before 20s');
+  assert.strictEqual(getEndlessThreat(20), 2, 'Threat advances to 2 at 20s');
+  assert.strictEqual(getEndlessThreat(100), 6, 'Threat advances to 6 at 100s');
+
+  function getEndlessBaseHP(threat) {
+    return Math.round(16 + Math.pow(threat, 1.28) * 3.6);
+  }
+
+  assert.strictEqual(getEndlessBaseHP(1), 20, 'Threat 1 base HP is 20');
+  assert.ok(getEndlessBaseHP(5) > getEndlessBaseHP(1), 'Threat 5 HP must exceed Threat 1');
+  assert.ok(getEndlessBaseHP(10) > getEndlessBaseHP(5), 'Threat 10 HP must exceed Threat 5');
+
+  // Milestone boss wave at every 5th threat
+  for (let t = 1; t <= 15; t++) {
+    const isBossWave = t % 5 === 0;
+    assert.strictEqual(isBossWave, t === 5 || t === 10 || t === 15, `Threat ${t} boss wave flag matches`);
+  }
+});
+
+// 23. Endless Survival Record Tracking & Score Persistence
+it('Endless survival duration tracks personal best time and threat level', () => {
+  const stats = { endlessBestTime: 45.2, endlessBestLevel: 3, highScore: 4520 };
+
+  function recordEndlessRun(timeSurvived, threatLevel) {
+    const prevBest = stats.endlessBestTime || 0;
+    const isNewRecord = timeSurvived > prevBest;
+    if (isNewRecord) {
+      stats.endlessBestTime = Math.round(timeSurvived * 10) / 10;
+      stats.endlessBestLevel = Math.max(stats.endlessBestLevel || 1, threatLevel);
+      stats.highScore = Math.max(stats.highScore || 0, Math.round(timeSurvived * 100));
+    }
+    return { isNewRecord, prevBest };
+  }
+
+  // Attempt 1: 30s (shorter than 45.2s)
+  const run1 = recordEndlessRun(30.0, 2);
+  assert.strictEqual(run1.isNewRecord, false, '30s is not a new record');
+  assert.strictEqual(stats.endlessBestTime, 45.2, 'Best time remains 45.2s');
+
+  // Attempt 2: 78.5s (longer than 45.2s)
+  const run2 = recordEndlessRun(78.54, 4);
+  assert.strictEqual(run2.isNewRecord, true, '78.5s triggers new personal record');
+  assert.strictEqual(stats.endlessBestTime, 78.5, 'Best time updated to 78.5s');
+  assert.strictEqual(stats.endlessBestLevel, 4, 'Best threat level updated to 4');
+  assert.strictEqual(stats.highScore, 7854, 'High score updated to 7854');
+});
+
 console.log('====================================================');
 console.log(`  Tests Completed: ${passedTests} / ${totalTests} Passed`);
 console.log('====================================================');

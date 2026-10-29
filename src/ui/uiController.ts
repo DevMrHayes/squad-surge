@@ -45,14 +45,44 @@ export class UIController {
     this.handleAuthStateChange(getCurrentProfile());
   }
 
-  public updateHUD(level: number, left: number, total: number, coins: number): void {
-    if (this.uiLevelNum) this.uiLevelNum.textContent = `${level}`;
-    if (this.uiEnemiesLeft) this.uiEnemiesLeft.textContent = `${left}`;
-    if (this.uiCoins) this.uiCoins.textContent = `${coins}`;
+  public formatSurvivalTime(seconds: number): string {
+    const m = Math.floor(seconds / 60);
+    const s = Math.floor(seconds % 60);
+    const ms = Math.floor((seconds % 1) * 10);
+    return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}.${ms}`;
+  }
 
-    if (this.uiProgressFill && total > 0) {
-      const pct = Math.max(0, Math.min(100, Math.round(((total - left) / total) * 100)));
-      this.uiProgressFill.style.width = `${pct}%`;
+  public updateHUD(
+    level: number, 
+    left: number, 
+    total: number, 
+    coins: number,
+    isEndless?: boolean,
+    endlessTime?: number,
+    endlessThreat?: number
+  ): void {
+    if (isEndless) {
+      if (this.uiLevelNum) this.uiLevelNum.textContent = `♾️ ${endlessThreat || 1}`;
+      const enemiesLabel = this.uiEnemiesLeft.parentElement?.querySelector('span:first-child');
+      if (enemiesLabel) enemiesLabel.textContent = '⏱️ SURVIVAL TIME';
+      if (this.uiEnemiesLeft) this.uiEnemiesLeft.textContent = this.formatSurvivalTime(endlessTime || 0);
+      if (this.uiCoins) this.uiCoins.textContent = `${coins}`;
+
+      if (this.uiProgressFill) {
+        const pct = Math.round((((endlessTime || 0) % 20) / 20) * 100);
+        this.uiProgressFill.style.width = `${pct}%`;
+      }
+    } else {
+      if (this.uiLevelNum) this.uiLevelNum.textContent = `${level}`;
+      const enemiesLabel = this.uiEnemiesLeft.parentElement?.querySelector('span:first-child');
+      if (enemiesLabel) enemiesLabel.textContent = 'Enemies Left';
+      if (this.uiEnemiesLeft) this.uiEnemiesLeft.textContent = `${left}`;
+      if (this.uiCoins) this.uiCoins.textContent = `${coins}`;
+
+      if (this.uiProgressFill && total > 0) {
+        const pct = Math.max(0, Math.min(100, Math.round(((total - left) / total) * 100)));
+        this.uiProgressFill.style.width = `${pct}%`;
+      }
     }
   }
 
@@ -64,21 +94,56 @@ export class UIController {
       return;
     }
 
+    const save = storage.getSave();
+    const isEndless = this.game.isEndless;
     const plan = this.game.plan;
 
-    const badgeEl = document.getElementById('startBadge')!;
-    badgeEl.textContent = `${plan.biome.name} • ${plan.archetype.badge}`;
-    badgeEl.style.borderColor = `${plan.archetype.badgeColor}60`;
-    badgeEl.style.color = plan.archetype.badgeColor;
+    // Update Mode Tabs Visual State
+    const tabCampaign = document.getElementById('tabModeCampaign');
+    const tabEndless = document.getElementById('tabModeEndless');
+    if (tabCampaign && tabEndless) {
+      if (isEndless) {
+        tabCampaign.className = 'flex-1 py-1.5 px-2 rounded-xl text-xs font-black tracking-wide uppercase transition-all text-slate-400 hover:text-white flex items-center justify-center gap-1';
+        tabEndless.className = 'flex-1 py-1.5 px-2 rounded-xl text-xs font-black tracking-wide uppercase transition-all bg-sky-500 text-slate-950 shadow-sm flex items-center justify-center gap-1';
+      } else {
+        tabCampaign.className = 'flex-1 py-1.5 px-2 rounded-xl text-xs font-black tracking-wide uppercase transition-all bg-sky-500 text-slate-950 shadow-sm flex items-center justify-center gap-1';
+        tabEndless.className = 'flex-1 py-1.5 px-2 rounded-xl text-xs font-black tracking-wide uppercase transition-all text-slate-400 hover:text-white flex items-center justify-center gap-1';
+      }
+    }
 
-    document.getElementById('startTitle')!.textContent = plan.isTitanLevel
-      ? 'TITAN SHOWDOWN'
-      : plan.isBossLevel
-        ? 'WARDEN ASSAULT'
-        : `${plan.archetype.title} (LV. ${plan.level})`;
-    document.getElementById('startRuleTitle')!.textContent = `${plan.biome.ruleTitle} | ${plan.archetype.title}`;
-    document.getElementById('startRuleDesc')!.textContent = `${plan.archetype.advisory} (FEATURED: ${plan.archetype.featuredBuff})`;
-    document.getElementById('startReward')!.textContent = `+${plan.coinReward} 🪙`;
+    const badgeEl = document.getElementById('startBadge')!;
+    const rewardEl = document.getElementById('startReward')!;
+    const titleEl = document.getElementById('startTitle')!;
+    const ruleTitleEl = document.getElementById('startRuleTitle')!;
+    const ruleDescEl = document.getElementById('startRuleDesc')!;
+    const deployBtn = document.getElementById('btnTapToStart');
+
+    if (isEndless) {
+      badgeEl.textContent = '♾️ ENDLESS HIGHWAY';
+      badgeEl.style.borderColor = '#38bdf860';
+      badgeEl.style.color = '#38bdf8';
+
+      const bestTime = this.formatSurvivalTime(save.stats.endlessBestTime || 0);
+      rewardEl.textContent = `BEST: ${bestTime} ⏱️`;
+      titleEl.textContent = 'INFINITE HIGHWAY SURVIVAL';
+      ruleTitleEl.textContent = 'Hold The Line • Dynamic Threat Escalation';
+      ruleDescEl.textContent = 'Enemies, Brutes, and Bosses scale continuously every 20 seconds. Survive as long as you can to set the high score!';
+      if (deployBtn) deployBtn.innerHTML = '<span>🚀 DEPLOY SURVIVAL SQUAD</span>';
+    } else {
+      badgeEl.textContent = `${plan.biome.name} • ${plan.archetype.badge}`;
+      badgeEl.style.borderColor = `${plan.archetype.badgeColor}60`;
+      badgeEl.style.color = plan.archetype.badgeColor;
+
+      rewardEl.textContent = `+${plan.coinReward} 🪙`;
+      titleEl.textContent = plan.isTitanLevel
+        ? 'TITAN SHOWDOWN'
+        : plan.isBossLevel
+          ? 'WARDEN ASSAULT'
+          : `${plan.archetype.title} (LV. ${plan.level})`;
+      ruleTitleEl.textContent = `${plan.biome.ruleTitle} | ${plan.archetype.title}`;
+      ruleDescEl.textContent = `${plan.archetype.advisory} (FEATURED: ${plan.archetype.featuredBuff})`;
+      if (deployBtn) deployBtn.innerHTML = '<span>🚀 DEPLOY SQUAD</span>';
+    }
 
     // Render prominent commander status card
     this.updateBriefingProfileCard(profile);
@@ -175,7 +240,7 @@ export class UIController {
     });
   }
 
-  public showResult(won: boolean, coins: number, reason?: string): void {
+  public showResult(won: boolean, coins: number, reason?: string, details?: any): void {
     const resIcon = document.getElementById('resIcon')!;
     const resTitle = document.getElementById('resTitle')!;
     const resDesc = document.getElementById('resDesc')!;
@@ -183,17 +248,45 @@ export class UIController {
     const resBaseReward = document.getElementById('resBaseReward');
     const resSurvivalBonus = document.getElementById('resSurvivalBonus');
     const btnNext = document.getElementById('btnNext')!;
+    const btnRetry = document.getElementById('btnRetry')!;
 
-    if (won) {
+    if (details?.isEndless) {
+      resIcon.textContent = details.isNewRecord ? '🏆' : '☠️';
+      resTitle.textContent = details.isNewRecord ? 'NEW SURVIVAL RECORD!' : 'ENDLESS RUN COMPLETE';
+      const timeStr = this.formatSurvivalTime(details.timeSurvived || 0);
+      resDesc.textContent = details.isNewRecord 
+        ? `Sensational endurance! You achieved a new personal best of ${timeStr}!` 
+        : (reason || `You held the line for ${timeStr} on the Infinite Highway.`);
+
+      const baseLabel = resBaseReward?.parentElement?.querySelector('span:first-child');
+      const bonusLabel = resSurvivalBonus?.parentElement?.querySelector('span:first-child');
+      if (baseLabel) baseLabel.textContent = 'Survival Duration:';
+      if (bonusLabel) bonusLabel.textContent = 'Threat Level Reached:';
+
+      if (resBaseReward) resBaseReward.textContent = `${timeStr} ⏱️`;
+      if (resSurvivalBonus) resSurvivalBonus.textContent = `Threat LV. ${details.threatLevel || 1} ⚡`;
+      resCoins.textContent = `+${coins} 🪙`;
+
+      btnRetry.textContent = 'Retry Survival';
+      btnNext.textContent = 'Campaign Mode ▸';
+      btnNext.classList.remove('hidden');
+    } else if (won) {
       resIcon.textContent = '🏆';
       resTitle.textContent = 'SECTOR SECURED';
       resDesc.textContent = reason || 'Excellent tactical command! Enemy phalanx neutralised.';
+
+      const baseLabel = resBaseReward?.parentElement?.querySelector('span:first-child');
+      const bonusLabel = resSurvivalBonus?.parentElement?.querySelector('span:first-child');
+      if (baseLabel) baseLabel.textContent = 'Base Clearance:';
+      if (bonusLabel) bonusLabel.textContent = 'Squad Survival Bonus:';
 
       const survivalBonus = Math.max(0, this.game.player.count * 2);
       const baseReward = Math.max(0, coins - survivalBonus);
       if (resBaseReward) resBaseReward.textContent = `+${baseReward} 🪙`;
       if (resSurvivalBonus) resSurvivalBonus.textContent = `+${survivalBonus} 🪙 (+${this.game.player.count} 👥)`;
       resCoins.textContent = `+${coins} 🪙`;
+      btnRetry.textContent = 'Retry';
+      btnNext.textContent = 'Next Level ▸';
       btnNext.classList.remove('hidden');
     } else {
       resIcon.textContent = '💥';
@@ -205,9 +298,16 @@ export class UIController {
       } else {
         resDesc.textContent = reason || 'Perimeter overrun! Prioritise high-threat flankers and unlock barriers early.';
       }
+
+      const baseLabel = resBaseReward?.parentElement?.querySelector('span:first-child');
+      const bonusLabel = resSurvivalBonus?.parentElement?.querySelector('span:first-child');
+      if (baseLabel) baseLabel.textContent = 'Base Clearance:';
+      if (bonusLabel) bonusLabel.textContent = 'Squad Survival Bonus:';
+
       if (resBaseReward) resBaseReward.textContent = `+0 🪙`;
       if (resSurvivalBonus) resSurvivalBonus.textContent = `+0 🪙 (0 👥)`;
       resCoins.textContent = `+${coins} 🪙`;
+      btnRetry.textContent = 'Retry';
       btnNext.classList.add('hidden');
     }
 
@@ -398,9 +498,31 @@ export class UIController {
       this.game.resume();
     });
 
+    // Game Mode Switcher Tabs
+    document.getElementById('tabModeCampaign')?.addEventListener('click', () => {
+      if (this.game.isEndless) {
+        const save = storage.getSave();
+        this.game.initLevel(save.level, false);
+        this.showStartBriefing();
+      }
+    });
+
+    document.getElementById('tabModeEndless')?.addEventListener('click', () => {
+      if (!this.game.isEndless) {
+        this.game.initLevel(1, true);
+        this.showStartBriefing();
+      }
+    });
+
+    document.getElementById('btnLaunchEndlessFromMap')?.addEventListener('click', () => {
+      this.mapModal.classList.add('hidden');
+      this.game.initLevel(1, true);
+      this.showStartBriefing();
+    });
+
     document.getElementById('btnRestartPause')?.addEventListener('click', () => {
       this.pauseModal.classList.add('hidden');
-      this.game.initLevel(this.game.currentLevel);
+      this.game.initLevel(this.game.currentLevel, this.game.isEndless);
       this.showStartBriefing();
     });
 
@@ -413,13 +535,18 @@ export class UIController {
     // Result buttons
     document.getElementById('btnRetry')?.addEventListener('click', () => {
       this.resultModal.classList.add('hidden');
-      this.game.initLevel(this.game.currentLevel);
+      this.game.initLevel(this.game.currentLevel, this.game.isEndless);
       this.showStartBriefing();
     });
 
     document.getElementById('btnNext')?.addEventListener('click', () => {
       this.resultModal.classList.add('hidden');
-      this.game.initLevel(Math.min(100, this.game.currentLevel + 1));
+      if (this.game.isEndless) {
+        const save = storage.getSave();
+        this.game.initLevel(save.level, false);
+      } else {
+        this.game.initLevel(Math.min(100, this.game.currentLevel + 1), false);
+      }
       this.showStartBriefing();
     });
 
@@ -718,6 +845,8 @@ export class UIController {
 
     const statHighScore = document.getElementById('statHighScore');
     if (statHighScore) statHighScore.textContent = `${save.stats.highScore || 0}`;
+    const statEndlessTime = document.getElementById('statEndlessTime');
+    if (statEndlessTime) statEndlessTime.textContent = this.formatSurvivalTime(save.stats.endlessBestTime || 0);
     document.getElementById('statKills')!.textContent = `${save.stats.totalKills}`;
     document.getElementById('statBosses')!.textContent = `${save.stats.bossesDefeated}`;
     document.getElementById('statAltars')!.textContent = `${save.stats.altarsUsed}`;

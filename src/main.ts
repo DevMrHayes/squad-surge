@@ -12,11 +12,11 @@ window.addEventListener('DOMContentLoaded', async () => {
   let ui: UIController;
 
   const game = new GameLoop(canvas, {
-    onHUDUpdate: (level, left, total, coins) => {
-      if (ui) ui.updateHUD(level, left, total, coins);
+    onHUDUpdate: (level, left, total, coins, isEndless, endlessTime, endlessThreat) => {
+      if (ui) ui.updateHUD(level, left, total, coins, isEndless, endlessTime, endlessThreat);
     },
-    onGameOver: (won, coins, reason) => {
-      if (ui) ui.showResult(won, coins, reason);
+    onGameOver: (won, coins, reason, details) => {
+      if (ui) ui.showResult(won, coins, reason, details);
     },
   });
 
