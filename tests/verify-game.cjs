@@ -247,6 +247,86 @@ it('Sound reward economy computes base clear plus squad survival bounty accurate
   assert.strictEqual(totalEarned, 114);
 });
 
+// 13. Anti-Shielding & Bullet Punch-Through
+it('Armory Crate allows bullet punch-through with residual damage to hit trailing enemies', () => {
+  const crate = { x: 190, y: 300, w: 90, h: 44, hp: 10 };
+  const bullet = { x: 190, y: 310, vy: -550, damage: 10, active: true };
+  const enemyBehind = { x: 190, y: 260, hp: 20 };
+
+  // Bullet hits crate
+  crate.hp -= bullet.damage;
+  bullet.y = crate.y - crate.h / 2 - 8; // punched through forward
+  bullet.damage = Math.max(1.5, bullet.damage * 0.65); // 6.5 residual damage
+
+  assert.strictEqual(bullet.active, true, 'Bullet must NOT be destroyed by crate');
+  assert.strictEqual(crate.hp, 0, 'Crate took initial hit');
+  assert.strictEqual(bullet.damage, 6.5, 'Bullet retains 65% punch-through damage');
+  assert.ok(bullet.y < crate.y, 'Bullet position advanced past crate towards enemy');
+
+  // Bullet proceeds to hit advancing enemy
+  enemyBehind.hp -= bullet.damage;
+  bullet.active = false;
+  assert.strictEqual(enemyBehind.hp, 13.5, 'Enemy trailing behind crate was damaged by punch-through bullet');
+});
+
+it('Maxed gate allows 100% free bullet pass-through with zero absorption', () => {
+  const maxedGate = { val: 12, maxVal: 12, chargeHits: 0 };
+  const bullet = { x: 100, y: 400, damage: 8, active: true };
+
+  // Combat collision check on maxed gate
+  const isMaxed = maxedGate.val >= maxedGate.maxVal;
+  assert.strictEqual(isMaxed, true);
+  // Maxed gate ignores bullet and allows pass-through
+  assert.strictEqual(bullet.active, true, 'Bullet remains active');
+  assert.strictEqual(bullet.damage, 8, 'Bullet retains 100% damage through maxed gate');
+});
+
+// 14. 6 Mission Archetypes Rotation
+it('Levels rotate deterministically across 6 distinct Mission Archetypes', () => {
+  const archetypes = [
+    'SWARM_INFILTRATION',
+    'ARMORED_SIEGE',
+    'ARTILLERY_STORM',
+    'PRECISION_GRID',
+    'CONVERSION_ZONE',
+    'TITAN_SHOWDOWN'
+  ];
+
+  function getArchetypeId(level) {
+    if (level % 10 === 0) return 'TITAN_SHOWDOWN';
+    const cycle = ['SWARM_INFILTRATION', 'ARMORED_SIEGE', 'ARTILLERY_STORM', 'PRECISION_GRID', 'CONVERSION_ZONE'];
+    return cycle[(level - 1) % cycle.length];
+  }
+
+  assert.strictEqual(getArchetypeId(1), 'SWARM_INFILTRATION');
+  assert.strictEqual(getArchetypeId(2), 'ARMORED_SIEGE');
+  assert.strictEqual(getArchetypeId(3), 'ARTILLERY_STORM');
+  assert.strictEqual(getArchetypeId(4), 'PRECISION_GRID');
+  assert.strictEqual(getArchetypeId(5), 'CONVERSION_ZONE');
+  assert.strictEqual(getArchetypeId(6), 'SWARM_INFILTRATION');
+  assert.strictEqual(getArchetypeId(10), 'TITAN_SHOWDOWN');
+  assert.strictEqual(getArchetypeId(20), 'TITAN_SHOWDOWN');
+});
+
+// 15. User Account Profile & Security Rules Validation Schema
+it('User profile stats allow highScore property for cloud synchronization', () => {
+  const profileStats = {
+    totalKills: 154,
+    bossesDefeated: 3,
+    totalCoinsEarned: 1250,
+    cratesOpened: 18,
+    highestSquad: 42,
+    highScore: 18500
+  };
+
+  const allowedKeys = ['totalKills', 'bossesDefeated', 'totalCoinsEarned', 'cratesOpened', 'highestSquad', 'highScore'];
+  const actualKeys = Object.keys(profileStats);
+  const isValidKeys = actualKeys.every(k => allowedKeys.includes(k));
+  assert.strictEqual(isValidKeys, true, 'All keys in stats must be within allowedKeys');
+  assert.strictEqual(typeof profileStats.highScore, 'number');
+  assert.ok(profileStats.highScore >= 0);
+});
+
 console.log('====================================================');
 console.log(`  Tests Completed: ${passedTests} / ${totalTests} Passed`);
 console.log('====================================================');

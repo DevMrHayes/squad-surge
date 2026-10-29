@@ -118,7 +118,7 @@ service cloud.firestore {
              stats.keys().hasOnly([
                'totalKills', 'bossesDefeated', 'gatesCharged', 
                'altarsUsed', 'ricochetKills', 'highestSquad', 
-               'gamesPlayed', 'victories'
+               'gamesPlayed', 'victories', 'highScore'
              ]) &&
              stats.totalKills is number && stats.totalKills >= 0 &&
              stats.bossesDefeated is number && stats.bossesDefeated >= 0 &&
@@ -127,7 +127,8 @@ service cloud.firestore {
              stats.ricochetKills is number && stats.ricochetKills >= 0 &&
              stats.highestSquad is number && stats.highestSquad >= 0 &&
              stats.gamesPlayed is number && stats.gamesPlayed >= 0 &&
-             stats.victories is number && stats.victories >= 0;
+             stats.victories is number && stats.victories >= 0 &&
+             (!('highScore' in stats) || (stats.highScore is number && stats.highScore >= 0));
     }
 
     // Game progress SaveData validation (strict type safety & DoS bounds)

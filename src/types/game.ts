@@ -301,10 +301,28 @@ export interface ObstacleQueueItem {
   dragFactor?: number;
 }
 
+export type MissionArchetype = 
+  | 'SWARM_INFILTRATION' 
+  | 'ARMORED_SIEGE' 
+  | 'ARTILLERY_STORM' 
+  | 'PRECISION_GRID' 
+  | 'CONVERSION_ZONE' 
+  | 'TITAN_SHOWDOWN';
+
+export interface MissionArchetypeConfig {
+  id: MissionArchetype;
+  badge: string;
+  badgeColor: string;
+  title: string;
+  advisory: string;
+  featuredBuff: string;
+}
+
 export interface LevelPlan {
   level: number;
   sector: SectorId;
   biome: BiomeConfig;
+  archetype: MissionArchetypeConfig;
   tier: number;
   isBossLevel: boolean;
   isTitanLevel: boolean;

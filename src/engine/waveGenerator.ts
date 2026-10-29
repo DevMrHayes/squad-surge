@@ -7,7 +7,8 @@ import {
   ObstacleQueueItem, 
   Enemy, 
   EnemyType, 
-  SectorId 
+  SectorId,
+  MissionArchetypeConfig 
 } from '../types/game';
 import { SECTOR_BIOMES, getSectorForLevel } from '../constants/biomes';
 
@@ -21,11 +22,80 @@ export class WaveGenerator {
     const isBossLevel = isTitan || isWarden;
     const tier = level >= 70 ? 5 : level >= 45 ? 4 : level >= 25 ? 3 : level >= 10 ? 2 : 1;
 
+    // Determine Distinct Mission Archetype
+    let archetype: MissionArchetypeConfig;
+    if (isTitan) {
+      archetype = {
+        id: 'TITAN_SHOWDOWN',
+        badge: '☠️ TITAN CLASH',
+        badgeColor: '#ef4444',
+        title: `TITAN SHOWDOWN #${Math.max(1, Math.floor(level / 10))}`,
+        advisory: 'Destroy the left and right weak-point armor plates first. Watch for the Phase 2 enrage minefields!',
+        featuredBuff: 'AP ROUNDS'
+      };
+    } else if (isWarden) {
+      archetype = {
+        id: 'TITAN_SHOWDOWN',
+        badge: '👑 WARDEN ASSAULT',
+        badgeColor: '#ec4899',
+        title: `WARDEN ASSAULT LV.${level}`,
+        advisory: 'Focus fire on the Warden weak-points while dodging high-damage mortar artillery shells.',
+        featuredBuff: 'AP ROUNDS'
+      };
+    } else {
+      const mode = (level - 1) % 5;
+      if (mode === 0) {
+        archetype = {
+          id: 'SWARM_INFILTRATION',
+          badge: '⚡ SWARM INFILTRATION',
+          badgeColor: '#fb923c',
+          title: `Rapid Sprinter Infiltration`,
+          advisory: 'High-speed sprinters rush in staggered flanks. Slide laterally to intercept and claim the Shotgun Vanguard crate!',
+          featuredBuff: 'VANGUARD SHOTGUNS'
+        };
+      } else if (mode === 1) {
+        archetype = {
+          id: 'ARMORED_SIEGE',
+          badge: '🛡️ ARMORED PHALANX',
+          badgeColor: '#38bdf8',
+          title: `Heavy Armor Siege`,
+          advisory: 'Armored Brutes and Shield Bearers advance in tight formation. Deflect shots through Ricochet Prism mirrors and claim AP Rounds!',
+          featuredBuff: 'AP ROUNDS'
+        };
+      } else if (mode === 2) {
+        archetype = {
+          id: 'ARTILLERY_STORM',
+          badge: '🎯 ARTILLERY BARRAGE',
+          badgeColor: '#c084fc',
+          title: `Trench Mortar Encampment`,
+          advisory: 'Backline artillery lob shells over gates. Use Yellow EMP Mortars or Cyan Snipers to neutralize them before perimeter breach.',
+          featuredBuff: 'EMP MORTARS'
+        };
+      } else if (mode === 3) {
+        archetype = {
+          id: 'PRECISION_GRID',
+          badge: '⚡ PRECISION GRID',
+          badgeColor: '#fde047',
+          title: `Oscillating Highway Grid`,
+          advisory: 'Sliding gates and alternating speed/hazard strips test your reflexes. Stand on Speed Strips for +50% fire rate.',
+          featuredBuff: 'SPEED STRIPS'
+        };
+      } else {
+        archetype = {
+          id: 'CONVERSION_ZONE',
+          badge: '🔮 CONVERSION ALTAR',
+          badgeColor: '#a855f7',
+          title: `High-Risk Weapon Evolution`,
+          advisory: 'Sacrifice squad soldiers at the dark conversion altar to evolve your squad with Piercing Lasers or Homing Micro-Missiles.',
+          featuredBuff: 'WEAPON EVOLUTION'
+        };
+      }
+    }
+
     // Smooth wave count progression: L1-2 = 2 waves, L3-8 = 3 waves, scaling to 6 waves max
     const waveCount = level <= 2 ? 2 : Math.min(6, 2 + Math.floor(level / 8));
 
     // Smooth enemy HP curve (Eliminates the impossible Level 2 wall)
-    // Level 1 = 16 HP, Level 2 = 18 HP, Level 5 = 25 HP, Level 10 = 42 HP
     const scaleFactor = 1 + (level - 1) * 0.08 + Math.pow(Math.max(0, level - 1), 1.4) * 0.010;
     const baseEnemyHP = Math.round(16 * scaleFactor);
     const scrollSpeed = Math.min(68, 42 + level * 0.22);
@@ -41,27 +111,19 @@ export class WaveGenerator {
 
     let cursorTime = 1.0;
 
-    const tacticalBoostPool: { boostType: 'AP' | 'CRYO' | 'BLAST' | 'FIRERATE' | 'SHIELD'; label: string; color: string }[] = [
-      { boostType: 'AP', label: '⚡ AP ROUNDS (2.5x vs 🛡️)', color: '#fde047' },
-      { boostType: 'CRYO', label: '❄️ CRYO SLOW (-45% SPD)', color: '#22d3ee' },
-      { boostType: 'BLAST', label: '💥 BLAST SPLASH AoE', color: '#fb923c' },
-      { boostType: 'FIRERATE', label: '🔥 FIRE RATE +25%', color: '#f43f5e' },
-      { boostType: 'SHIELD', label: '🛡️ +2 SQUAD SHIELDS', color: '#c084fc' }
-    ];
-
     for (let w = 0; w < waveCount; w++) {
       const greedLane = (w + level) % 2; // 0 = Left, 1 = Right
       const threatLane = 1 - greedLane;
       const pairId = (level * 1000) + (w * 10) + 1; // Mutual exclusion pair identifier
 
       const isLockedMult = (w === waveCount - 1) && (level >= 3);
-      const isTacticalBuffGate = (w % 2 === 1) && (level >= 2);
-      const isAltarWave = sector >= 4 && w === 1 && level >= 61;
+      const isAltarWave = (archetype.id === 'CONVERSION_ZONE' && w === 0) || (sector >= 4 && w === 1 && level >= 61);
+      const isTacticalBuffGate = !isAltarWave && (w % 2 === 1) && (level >= 2);
       const isQuantumWave = sector === 5 && w % 2 === 0;
 
-      // 1. GATES (Guarantee strictly positive rewards in early levels)
+      // 1. GATES
       if (isAltarWave) {
-        // Sacrifice / Conversion Altar (Sector 4+)
+        // Sacrifice / Conversion Altar
         gateQueue.push({
           spawnTime: cursorTime,
           lane: greedLane,
@@ -103,15 +165,27 @@ export class WaveGenerator {
           pairId,
         });
       } else if (isTacticalBuffGate) {
-        const buff = tacticalBoostPool[(level + w) % tacticalBoostPool.length];
+        const buffType = archetype.id === 'ARMORED_SIEGE' ? 'AP' 
+                       : archetype.id === 'SWARM_INFILTRATION' ? 'CRYO'
+                       : archetype.id === 'ARTILLERY_STORM' ? 'BLAST'
+                       : 'FIRERATE';
+        const label = buffType === 'AP' ? '⚡ AP ROUNDS (2.5x vs 🛡️)'
+                    : buffType === 'CRYO' ? '❄️ CRYO SLOW (-45% SPD)'
+                    : buffType === 'BLAST' ? '💥 BLAST SPLASH AoE'
+                    : '🔥 FIRE RATE +25%';
+        const color = buffType === 'AP' ? '#fde047'
+                    : buffType === 'CRYO' ? '#22d3ee'
+                    : buffType === 'BLAST' ? '#fb923c'
+                    : '#f43f5e';
         const lockHits = Math.min(16, Math.round(6 + level * 0.25));
+
         gateQueue.push({
           spawnTime: cursorTime,
           lane: greedLane,
           kind: 'BUFF_GATE',
-          boostType: buff.boostType,
-          label: buff.label,
-          color: buff.color,
+          boostType: buffType,
+          label,
+          color,
           lockHitsRemaining: lockHits,
           lockHitsMax: lockHits,
           pairId,
@@ -128,6 +202,7 @@ export class WaveGenerator {
       } else {
         // Chargeable Gate
         const startVal = level <= 2 ? (w === 0 ? 4 : 3) : Math.max(-3, 2 - Math.floor(level * 0.15) - w);
+        const isSliding = (archetype.id === 'PRECISION_GRID') || (sector >= 2 && Math.random() < 0.5);
         gateQueue.push({
           spawnTime: cursorTime,
           lane: greedLane,
@@ -135,7 +210,7 @@ export class WaveGenerator {
           val: startVal,
           maxVal: maxAddCap,
           hitsPerStep: hitsPerIncrement,
-          sliding: sector >= 2 && Math.random() < 0.5,
+          sliding: isSliding,
           flipPolarity: isQuantumWave,
           pairId,
         });
@@ -150,8 +225,8 @@ export class WaveGenerator {
         });
       }
 
-      // 2. FIELD OBSTACLES (Introduced in Sector 3+)
-      if (sector === 3 || (sector > 3 && Math.random() < 0.45)) {
+      // 2. FIELD OBSTACLES (Prism Mirrors in Armored Siege; Speed/Hazard Strips in Precision Grid)
+      if (archetype.id === 'ARMORED_SIEGE' || sector === 3 || (sector > 3 && Math.random() < 0.45)) {
         obstacleQueue.push({
           spawnTime: cursorTime + 0.6,
           type: 'PRISM_MIRROR',
@@ -160,7 +235,7 @@ export class WaveGenerator {
         });
       }
 
-      if (sector >= 2 && Math.random() < 0.4 && w > 0) {
+      if (archetype.id === 'PRECISION_GRID' || (sector >= 2 && Math.random() < 0.4 && w > 0)) {
         obstacleQueue.push({
           spawnTime: cursorTime + 1.2,
           type: Math.random() < 0.6 ? 'SPEED_STRIP' : 'HAZARD_STRIP',
@@ -171,28 +246,50 @@ export class WaveGenerator {
         });
       }
 
-      // 3. SPRINTERS (Zero sprinters on Level 1; gentle 1 sprinter on Level 2)
+      // 3. SPRINTERS & FLANKERS
       if (level >= 2) {
-        const sprinterCount = level <= 3 ? (w === 0 ? 0 : 1) : Math.min(3, 1 + Math.floor(w / 2));
+        const isSwarm = archetype.id === 'SWARM_INFILTRATION';
+        const sprinterCount = level <= 3 
+          ? (w === 0 ? (isSwarm ? 1 : 0) : 1) 
+          : isSwarm 
+          ? Math.min(4, 2 + Math.floor(w / 2)) 
+          : Math.min(2, 1 + Math.floor(w / 3));
+
         for (let s = 0; s < sprinterCount; s++) {
           const laneCenter = threatLane === 0 ? 0.25 : 0.75;
+          const jitter = isSwarm ? (s % 2 === 0 ? -0.1 : 0.1) : 0;
           const sHp = Math.round(baseEnemyHP * 0.65);
           enemySchedule.push({
-            spawnTime: cursorTime + 0.6 + s * 0.8,
-            xNorm: laneCenter,
+            spawnTime: cursorTime + 0.5 + s * (isSwarm ? 0.5 : 0.8),
+            xNorm: Math.max(0.12, Math.min(0.88, laneCenter + jitter)),
             kind: 'SPRINTER',
             hp: sHp,
             maxHp: sHp,
-            speedMult: level <= 3 ? 1.55 : 1.95
+            speedMult: level <= 3 ? 1.55 : isSwarm ? 2.1 : 1.85
           });
         }
       }
 
       cursorTime += 2.8;
 
-      // 4. ARMORY CRATE (Introduced in Level 2+ as a helpful reward)
+      // 4. ARMORY CRATES & SPECIALISTS
       if (level >= 2 && (w % 2 === 0 || w === waveCount - 1)) {
-        const cDef = tacticalBoostPool[(level + w + 1) % tacticalBoostPool.length];
+        const boostType = archetype.id === 'SWARM_INFILTRATION' ? 'VANGUARD'
+                        : archetype.id === 'ARMORED_SIEGE' ? 'AP'
+                        : archetype.id === 'ARTILLERY_STORM' ? 'MORTAR'
+                        : archetype.id === 'PRECISION_GRID' ? 'FIRERATE'
+                        : 'BLAST';
+        const label = boostType === 'VANGUARD' ? '⚡ +2 VANGUARD SPECS'
+                    : boostType === 'AP' ? '⚡ AP ROUNDS (2.5x vs 🛡️)'
+                    : boostType === 'MORTAR' ? '🟡 +1 EMP MORTAR SPEC'
+                    : boostType === 'FIRERATE' ? '🔥 FIRE RATE +35%'
+                    : '💥 BLAST SPLASH AoE';
+        const color = boostType === 'VANGUARD' ? '#f97316'
+                    : boostType === 'AP' ? '#fde047'
+                    : boostType === 'MORTAR' ? '#eab308'
+                    : boostType === 'FIRERATE' ? '#f43f5e'
+                    : '#fb923c';
+
         const crateHP = Math.round(baseEnemyHP * (1.3 + w * 0.2));
         const crateLane3 = (level + w) % 3;
         crateQueue.push({
@@ -200,11 +297,13 @@ export class WaveGenerator {
           lane3: crateLane3,
           hp: crateHP,
           maxHp: crateHP,
-          ...cDef
+          boostType,
+          label,
+          color,
         });
 
-        // Mines appear only starting Level 3+
-        if (level >= 3) {
+        // Mines appear in Artillery & Precision Grid starting Level 3+
+        if (level >= 3 && (archetype.id === 'ARTILLERY_STORM' || archetype.id === 'PRECISION_GRID' || level >= 6)) {
           const mineLane = (crateLane3 + 1) % 3;
           const mHp = Math.round(baseEnemyHP * 0.75);
           enemySchedule.push({
@@ -217,8 +316,8 @@ export class WaveGenerator {
           });
         }
 
-        // Shooters appear only starting Level 4+
-        if (level >= 4) {
+        // Shooters appear in Artillery Storm & higher levels
+        if (level >= 4 && (archetype.id === 'ARTILLERY_STORM' || level >= 8)) {
           const shooterLane = (crateLane3 + 2) % 3;
           const shHp = Math.round(baseEnemyHP * 1.25);
           enemySchedule.push({
@@ -235,7 +334,6 @@ export class WaveGenerator {
       }
 
       // 5. MAIN COMBAT WAVE
-      // Level 1: 1 row of 3 runners. Level 2: 1 row of 4 runners. Level 3+: 2 rows.
       const rowsInWave = level <= 2 ? 1 : Math.min(3, 1 + Math.floor(w / 2));
       for (let r = 0; r < rowsInWave; r++) {
         const countInRow = level === 1 ? 3 : level === 2 ? 4 : 4 + (r % 2);
@@ -245,11 +343,12 @@ export class WaveGenerator {
           let hpMult = 0.9 + w * 0.15;
           let spdMult = 1.0;
 
-          // Brutes only appear starting Level 4+
+          // Armored Siege focuses on Brutes & Shield Bearers
           if (level >= 4 && r === 0 && (c === 1 || c === countInRow - 2)) {
-            kind = (sector >= 4 && c === 1) ? 'SHIELD_BEARER' : 'BRUTE';
-            hpMult *= 2.0;
-            spdMult = 0.78;
+            const isSiege = archetype.id === 'ARMORED_SIEGE';
+            kind = (isSiege && c === 1) || sector >= 4 ? 'SHIELD_BEARER' : 'BRUTE';
+            hpMult *= isSiege ? 2.4 : 2.0;
+            spdMult = 0.76;
           } else if (level >= 15 && r === rowsInWave - 1 && c === Math.floor(countInRow / 2) && Math.random() < 0.35) {
             kind = 'HEALER_DRONE';
             hpMult *= 1.1;
@@ -330,6 +429,7 @@ export class WaveGenerator {
       level,
       sector,
       biome,
+      archetype,
       tier,
       isBossLevel,
       isTitanLevel: isTitan,

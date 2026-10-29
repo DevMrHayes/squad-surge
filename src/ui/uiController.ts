@@ -66,10 +66,18 @@ export class UIController {
 
     const plan = this.game.plan;
 
-    document.getElementById('startBadge')!.textContent = plan.biome.name;
-    document.getElementById('startTitle')!.textContent = plan.isTitanLevel ? 'TITAN SHOWDOWN' : plan.isBossLevel ? 'WARDEN ASSAULT' : `MISSION ${plan.level}`;
-    document.getElementById('startRuleTitle')!.textContent = plan.biome.ruleTitle;
-    document.getElementById('startRuleDesc')!.textContent = plan.biome.ruleDesc;
+    const badgeEl = document.getElementById('startBadge')!;
+    badgeEl.textContent = `${plan.biome.name} • ${plan.archetype.badge}`;
+    badgeEl.style.borderColor = `${plan.archetype.badgeColor}60`;
+    badgeEl.style.color = plan.archetype.badgeColor;
+
+    document.getElementById('startTitle')!.textContent = plan.isTitanLevel
+      ? 'TITAN SHOWDOWN'
+      : plan.isBossLevel
+        ? 'WARDEN ASSAULT'
+        : `${plan.archetype.title} (LV. ${plan.level})`;
+    document.getElementById('startRuleTitle')!.textContent = `${plan.biome.ruleTitle} | ${plan.archetype.title}`;
+    document.getElementById('startRuleDesc')!.textContent = `${plan.archetype.advisory} (FEATURED: ${plan.archetype.featuredBuff})`;
     document.getElementById('startReward')!.textContent = `+${plan.coinReward} 🪙`;
 
     // Render prominent commander status card

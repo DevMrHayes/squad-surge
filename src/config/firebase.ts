@@ -65,29 +65,12 @@ export function isCurrentAdmin(): boolean {
 }
 
 export async function getOrCreateUserProfile(user: User): Promise<UserAccountProfile> {
-  const userRef = doc(db, 'squad_surge_users', user.uid);
-  const snap = await getDoc(userRef);
   const userEmail = (user.email || '').toLowerCase();
   const isAdmin = userEmail === PRIMARY_ADMIN_EMAIL;
 
-  if (snap.exists()) {
-    const data = snap.data() as UserAccountProfile;
-    // Enforce admin privileges if user matches primary admin email
-    if (isAdmin && (data.role !== 'ADMIN' || data.status !== 'APPROVED')) {
-      data.role = 'ADMIN';
-      data.status = 'APPROVED';
-      await updateDoc(userRef, { role: 'ADMIN', status: 'APPROVED', lastLoginAt: Date.now() });
-    } else {
-      await updateDoc(userRef, { lastLoginAt: Date.now() }).catch(() => {});
-    }
-    currentProfile = data;
-    return data;
-  }
-
-  // Create new profile
-  const newProfile: UserAccountProfile = {
+  const defaultProfile: UserAccountProfile = {
     uid: user.uid,
-    email: user.email || 'commander@squadsurge.local',
+    email: user.email || (isAdmin ? PRIMARY_ADMIN_EMAIL : 'commander@squadsurge.local'),
     displayName: user.displayName || (isAdmin ? 'Chief Commander Hayes' : 'Recruit Commander'),
     photoURL: user.photoURL || undefined,
     role: isAdmin ? 'ADMIN' : 'PLAYER',
@@ -114,6 +97,7 @@ export async function getOrCreateUserProfile(user: User): Promise<UserAccountPro
         highestSquad: 5,
         gamesPlayed: 0,
         victories: 0,
+        highScore: 0,
       },
       achievements: {},
     },
@@ -121,9 +105,38 @@ export async function getOrCreateUserProfile(user: User): Promise<UserAccountPro
     lastLoginAt: Date.now(),
   };
 
-  await setDoc(userRef, newProfile);
-  currentProfile = newProfile;
-  return newProfile;
+  if (!db) {
+    currentProfile = defaultProfile;
+    return defaultProfile;
+  }
+
+  try {
+    const userRef = doc(db, 'squad_surge_users', user.uid);
+    const snap = await getDoc(userRef);
+
+    if (snap.exists()) {
+      const data = snap.data() as UserAccountProfile;
+      // Enforce admin privileges if user matches primary admin email
+      if (isAdmin && (data.role !== 'ADMIN' || data.status !== 'APPROVED')) {
+        data.role = 'ADMIN';
+        data.status = 'APPROVED';
+        await updateDoc(userRef, { role: 'ADMIN', status: 'APPROVED', lastLoginAt: Date.now() }).catch(() => {});
+      } else {
+        await updateDoc(userRef, { lastLoginAt: Date.now() }).catch(() => {});
+      }
+      currentProfile = data;
+      return data;
+    }
+
+    // New profile creation
+    await setDoc(userRef, defaultProfile);
+    currentProfile = defaultProfile;
+    return defaultProfile;
+  } catch (err) {
+    console.warn('[Firestore] Profile store error; activating resilient session fallback:', err);
+    currentProfile = defaultProfile;
+    return defaultProfile;
+  }
 }
 
 export function initAuthListener(onProfileLoaded: (profile: UserAccountProfile | null) => void) {
@@ -190,7 +203,6 @@ export async function saveProfileToCloud(saveData: SaveData): Promise<boolean> {
     await updateDoc(userRef, {
       saveData,
       lastLoginAt: Date.now(),
-      serverTimestamp: serverTimestamp(),
     });
     if (currentProfile) currentProfile.saveData = saveData;
     return true;

@@ -374,12 +374,16 @@ export class CombatEngine {
 
       // 1. Check Gate Hits
       for (const g of gates) {
+        // Maxed or Unlocked Gates: 100% Pass-Through (Bullets fly through to hit enemies behind)
+        const isMaxed = (g.val >= g.maxVal && (g.kind === 'CHARGE_ADD' || g.kind === 'HAZARD' || g.kind === 'QUANTUM')) ||
+                        ((g.kind === 'LOCKED_MULT' || g.kind === 'BUFF_GATE') && g.unlocked);
+        if (isMaxed) continue;
+
         if (
           b.y <= g.y + g.h / 2 &&
           b.y >= g.y - g.h / 2 &&
           Math.abs(b.x - g.x) <= g.w / 2
         ) {
-          b.active = false;
           g.hitScale = 1.0;
           this.createExplosionParticles(b.x, b.y, g.color || '#38bdf8', particles, 4, true);
 
@@ -418,7 +422,7 @@ export class CombatEngine {
                   }
                   floatTexts.push({
                     id: Math.random(),
-                    text: '⚡ MAXED (+${g.maxVal})!',
+                    text: `⚡ MAXED (+${g.maxVal})!`,
                     x: g.x,
                     y: g.y - 18,
                     vy: -35,
@@ -433,11 +437,16 @@ export class CombatEngine {
               g.chargeHits = g.hitsPerStep;
             }
           }
+
+          // Anti-Shielding Punch-Through: Bullets charge gate and punch through with 50% damage
+          // so enemies walking behind the gate take kinetic damage!
+          b.damage = Math.max(1.5, b.damage * 0.50);
+          b.y = g.y - g.h / 2 - 8;
           return;
         }
       }
 
-      // 2. Check Armory Crate Hits
+      // 2. Check Armory Crate Hits (Anti-Shielding Punch-Through)
       for (let j = crates.length - 1; j >= 0; j--) {
         const c = crates[j];
         if (
@@ -445,15 +454,21 @@ export class CombatEngine {
           b.y >= c.y - c.h / 2 &&
           Math.abs(b.x - c.x) <= c.w / 2
         ) {
-          b.active = false;
           c.hp -= b.damage;
           c.hitScale = 1.0;
           this.createExplosionParticles(b.x, b.y, c.color, particles, 4, true);
+
           if (c.hp <= 0) {
             unlockBoost(c.boostType, c.x, c.y, c.color);
             sfx.playExplosion(false);
             if (shockwaves) this.createShockwave(c.x, c.y, c.color, shockwaves, 54);
             crates.splice(j, 1);
+            // Bullet punches through destroyed crate with 100% damage intact
+          } else {
+            // Bullet damages crate AND punches through beyond it with 65% damage
+            // ensuring shielded enemies behind crates are actively hit!
+            b.damage = Math.max(1.5, b.damage * 0.65);
+            b.y = c.y - c.h / 2 - 8;
           }
           return;
         }
