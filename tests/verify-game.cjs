@@ -1007,6 +1007,37 @@ it('Tablet/Kindle viewport scaling and offline multi-slot local save persistence
   assert.ok(loopSrc.includes('this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0)'), 'GameLoop.resize uses setTransform for clean tablet scaling');
 });
 
+// 40. Boss Arena Standoff Combat, Barrier Text Auto-Fit & Benchmark Accolade Economy
+it('Boss Arena standoff mode anchors boss, halts highway scrolling, and awards benchmark accolades', () => {
+  const fs = require('fs');
+  const path = require('path');
+  const loopSrc = fs.readFileSync(path.join(__dirname, '../src/engine/gameLoop.ts'), 'utf8');
+  const renderSrc = fs.readFileSync(path.join(__dirname, '../src/engine/renderer.ts'), 'utf8');
+  const uiSrc = fs.readFileSync(path.join(__dirname, '../src/ui/uiController.ts'), 'utf8');
+  const htmlSrc = fs.readFileSync(path.join(__dirname, '../index.html'), 'utf8');
+
+  // 1. Barrier auto-fitted text and dynamic clamping
+  assert.ok(renderSrc.includes('drawFittedText') && renderSrc.includes('finalText.slice(0, -1)'), 'GameRenderer uses drawFittedText to auto-clamp text within barrier boxes');
+
+  // 2. Boss Arena Standoff & Highway Scroll Halt
+  assert.ok(loopSrc.includes('isBossArenaActive') && loopSrc.includes('this.plan.scrollSpeed = 0'), 'GameLoop halts highway scroll during Boss Arena Standoff');
+  assert.ok(loopSrc.includes('e.y = this.ch * 0.20'), 'GameLoop anchors boss at standoff distance (ch * 0.20)');
+  assert.ok(renderSrc.includes('Boss Arena Standoff Header HUD') && renderSrc.includes('STANDOFF:'), 'GameRenderer renders Boss Arena Standoff header HUD with health bar');
+
+  // 3. Tactical Accolades & Benchmark Economy
+  assert.ok(loopSrc.includes('unbroken_formation') && loopSrc.includes('Unbroken Formation'), 'GameLoop awards Unbroken Formation accolade');
+  assert.ok(loopSrc.includes('massive_mobilization') && loopSrc.includes('Massive Mobilization'), 'GameLoop awards Massive Mobilization accolade');
+  assert.ok(loopSrc.includes('trickshot_master') && loopSrc.includes('Trickshot Master'), 'GameLoop awards Trickshot Master accolade');
+  assert.ok(loopSrc.includes('titan_slayer') && loopSrc.includes('Titan Slayer'), 'GameLoop awards Titan Slayer accolade');
+
+  // 4. Endless Survival Duration Milestones
+  assert.ok(loopSrc.includes('INITIAL SURGE (1 MIN)') && loopSrc.includes('ENDLESS LEGEND (5 MIN)'), 'GameLoop awards in-game duration milestones in Endless Survival');
+
+  // 5. Result Modal Accolades UI
+  assert.ok(htmlSrc.includes('id="resAccoladesRow"') && htmlSrc.includes('id="resAccoladesList"'), 'index.html contains accolades container in result modal');
+  assert.ok(uiSrc.includes('resAccoladesList') && uiSrc.includes('acc.icon'), 'uiController dynamically renders earned tactical accolade badges in Result Modal');
+});
+
 console.log('====================================================');
 console.log(`  Tests Completed: ${passedTests} / ${totalTests} Passed`);
 console.log('====================================================');

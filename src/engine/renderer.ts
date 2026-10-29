@@ -31,7 +31,9 @@ export class GameRenderer {
     particles: Particle[],
     shockwaves: Shockwave[],
     floatTexts: FloatingText[],
-    dualThumbBannerTimer: number = 0
+    dualThumbBannerTimer: number = 0,
+    isBossArenaActive: boolean = false,
+    arenaBoss: Enemy | null = null
   ): void {
     ctx.clearRect(0, 0, cw, ch);
 
@@ -90,13 +92,23 @@ export class GameRenderer {
     ctx.stroke();
     ctx.setLineDash([]);
 
-    // Highway Edge Rails
-    ctx.strokeStyle = biome.accentColor;
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.moveTo(roadMargin, 0); ctx.lineTo(roadMargin, ch);
-    ctx.moveTo(cw - roadMargin, 0); ctx.lineTo(cw - roadMargin, ch);
-    ctx.stroke();
+    // Highway Edge Rails (with glowing red hazard strobes during boss standoff arena)
+    if (isBossArenaActive) {
+      const strobePulse = 0.55 + 0.45 * Math.sin(elapsed * 12);
+      ctx.strokeStyle = `rgba(239, 68, 68, ${strobePulse})`;
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.moveTo(roadMargin, 0); ctx.lineTo(roadMargin, ch);
+      ctx.moveTo(cw - roadMargin, 0); ctx.lineTo(cw - roadMargin, ch);
+      ctx.stroke();
+    } else {
+      ctx.strokeStyle = biome.accentColor;
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(roadMargin, 0); ctx.lineTo(roadMargin, ch);
+      ctx.moveTo(cw - roadMargin, 0); ctx.lineTo(cw - roadMargin, ch);
+      ctx.stroke();
+    }
 
     // 3. Render Field Obstacles (Prisms, Speed/Hazard Strips)
     obstacles.forEach(obs => {
@@ -204,7 +216,7 @@ export class GameRenderer {
       }
     });
 
-    // 4. Render Gates with Elastic Spring Hit Feedback
+    // 4. Render Gates with Elastic Spring Hit Feedback & Auto-Fitted Text
     gates.forEach(g => {
       ctx.save();
       const spring = g.hitScale || 0;
@@ -212,6 +224,35 @@ export class GameRenderer {
       const h = g.h * (1.0 + spring * 0.08);
       const rx = g.x - w / 2;
       const ry = g.y - h / 2;
+
+      // Dynamic text fitting & auto-clamping routine ensuring no text ever spills outside gate boxes
+      const drawFittedText = (
+        text: string,
+        centerX: number,
+        centerY: number,
+        maxWidth: number,
+        baseSize: number,
+        minSize: number = 7.5,
+        weight: string | number = 900,
+        fontFamily: string = 'Inter, sans-serif'
+      ) => {
+        let size = baseSize;
+        ctx.font = `${weight} ${size}px ${fontFamily}`;
+        let measured = ctx.measureText(text).width;
+        if (measured > maxWidth) {
+          size = Math.max(minSize, Math.floor(baseSize * (maxWidth / measured)));
+          ctx.font = `${weight} ${size}px ${fontFamily}`;
+          measured = ctx.measureText(text).width;
+        }
+        let finalText = text;
+        if (measured > maxWidth) {
+          while (finalText.length > 2 && ctx.measureText(`${finalText}…`).width > maxWidth) {
+            finalText = finalText.slice(0, -1);
+          }
+          finalText = `${finalText}…`;
+        }
+        ctx.fillText(finalText, centerX, centerY);
+      };
 
       if (g.kind === 'ALTAR') {
         // Sacrifice Altar (Can be shot to purify and reduce troop cost down to 0)
@@ -225,19 +266,17 @@ export class GameRenderer {
         ctx.stroke();
 
         ctx.fillStyle = isFree ? '#34d399' : '#e9d5ff';
-        ctx.font = '800 11px Inter, sans-serif';
         ctx.textAlign = 'center';
-        ctx.fillText(isFree ? '⚡ PURIFIED ASCENSION SHRINE' : '🔮 SACRIFICE ALTAR', g.x, ry + 18);
+        drawFittedText(isFree ? '⚡ PURIFIED SHRINE' : '🔮 SACRIFICE ALTAR', g.x, ry + 18, w - 16, 11, 8, 800);
 
         ctx.fillStyle = isFree ? '#34d399' : '#f43f5e';
-        ctx.font = '900 13px "JetBrains Mono", monospace';
-        ctx.fillText(isFree ? '0 SQUAD (FREE)' : `-${g.altarSacrificeCost} SQUAD`, g.x, ry + 34);
+        drawFittedText(isFree ? '0 SQUAD (FREE)' : `-${g.altarSacrificeCost} SQUAD`, g.x, ry + 34, w - 16, 13, 9, 900, '"JetBrains Mono", monospace');
 
         ctx.fillStyle = '#fbbf24';
-        ctx.font = '700 8.5px Inter, sans-serif';
-        ctx.fillText(g.altarWeaponReward === 'laserWeapon' ? 'REWARD: PIERCING LASER' : 'REWARD: HOMING MISSILES', g.x, ry + 46);
+        const rewardStr = g.altarWeaponReward === 'laserWeapon' ? 'REWARD: LASER' : 'REWARD: MISSILES';
+        drawFittedText(rewardStr, g.x, ry + 46, w - 16, 8.5, 7, 700);
       } else if (g.kind === 'LOCKED_MULT' || g.kind === 'BUFF_GATE') {
-        // Locked Mult or Buff Gate
+        // Locked Mult or Buff Gate (Cryo, AP, Blast, Fire Rate, Dual Squad)
         ctx.fillStyle = g.unlocked ? 'rgba(16, 185, 129, 0.25)' : 'rgba(15, 23, 42, 0.92)';
         ctx.strokeStyle = g.unlocked ? '#10b981' : (g.color || '#fde047');
         ctx.lineWidth = 2.5;
@@ -248,37 +287,34 @@ export class GameRenderer {
 
         const hitsLeft = Math.max(0, Math.ceil(g.lockHitsRemaining));
         const rewardName = g.kind === 'LOCKED_MULT'
-          ? `x${g.val} SQUAD MULTIPLIER`
-          : (g.label || (g.boostType ? `${g.boostType} BOOST` : 'TACTICAL BOOST'));
+          ? `x${g.val} SQUAD`
+          : (g.label || (g.boostType ? `${g.boostType} BOOST` : 'BOOST'));
 
         const gateTitle = g.unlocked 
-          ? `🔓 CLAIM: ${rewardName}` 
+          ? `🔓 ${rewardName}` 
           : `🔒 ${rewardName} (${hitsLeft})`;
 
         ctx.fillStyle = g.unlocked ? '#34d399' : '#ffffff';
-        ctx.font = '900 11px Inter, sans-serif';
         ctx.textAlign = 'center';
-        ctx.fillText(gateTitle, g.x, ry + 19);
+        drawFittedText(gateTitle, g.x, ry + 19, w - 16, 11, 7.5, 900);
 
         if (!g.unlocked) {
-          const barW = w - 28;
+          const barW = w - 24;
           const barH = 5;
           const progress = Math.max(0, 1 - g.lockHitsRemaining / Math.max(1, g.lockHitsMax));
           ctx.fillStyle = '#1e293b';
-          ctx.fillRect(g.x - barW / 2, ry + 29, barW, barH);
+          ctx.fillRect(g.x - barW / 2, ry + 28, barW, barH);
           ctx.fillStyle = g.color || '#fde047';
-          ctx.fillRect(g.x - barW / 2, ry + 29, barW * progress, barH);
+          ctx.fillRect(g.x - barW / 2, ry + 28, barW * progress, barH);
 
           ctx.fillStyle = '#94a3b8';
-          ctx.font = '800 8.5px "JetBrains Mono", monospace';
-          ctx.fillText(`SHOOT TO CHARGE (${hitsLeft} LEFT)`, g.x, ry + 42);
+          drawFittedText(`SHOOT TO CHARGE (${hitsLeft})`, g.x, ry + 42, w - 16, 8.5, 7, 800, '"JetBrains Mono", monospace');
         } else {
           ctx.fillStyle = '#10b981';
-          ctx.fillRect(g.x - (w - 28) / 2, ry + 27, w - 28, 4);
+          ctx.fillRect(g.x - (w - 24) / 2, ry + 27, w - 24, 4);
 
           ctx.fillStyle = '#34d399';
-          ctx.font = '900 10.5px "JetBrains Mono", monospace';
-          ctx.fillText('⚡ PASS THROUGH TO CLAIM', g.x, ry + 41);
+          drawFittedText('⚡ PASS TO CLAIM', g.x, ry + 41, w - 16, 10.5, 8, 900, '"JetBrains Mono", monospace');
         }
       } else {
         // Standard Charge Add / Hazard / Quantum Gate
@@ -312,14 +348,13 @@ export class GameRenderer {
         ctx.stroke();
         ctx.restore();
 
-        // Center Value Text
+        // Center Value Text with auto-clamp
         ctx.fillStyle = isMaxed ? '#34d399' : '#ffffff';
-        ctx.font = '900 18px "JetBrains Mono", monospace';
         ctx.textAlign = 'center';
         if (isHazard) {
-          ctx.fillText(isMaxed ? '0 SAFE' : `${Math.round(g.val)} HAZARD`, g.x, ry + 22);
+          drawFittedText(isMaxed ? '0 SAFE' : `${Math.round(g.val)} HAZARD`, g.x, ry + 22, w - 16, 18, 11, 900, '"JetBrains Mono", monospace');
         } else {
-          ctx.fillText(isMaxed ? `🔓 +${Math.round(g.val)} CLAIMABLE` : `${g.val > 0 ? '+' : ''}${Math.round(g.val)}`, g.x, ry + 22);
+          drawFittedText(isMaxed ? `🔓 +${Math.round(g.val)} CLAIMABLE` : `${g.val > 0 ? '+' : ''}${Math.round(g.val)}`, g.x, ry + 22, w - 16, 18, 11, 900, '"JetBrains Mono", monospace');
         }
 
         // Charge Progress Bar (Smoothly handles negative starts and hazards)
@@ -1127,6 +1162,61 @@ export class GameRenderer {
       ctx.fillStyle = '#e2e8f0';
       ctx.font = '700 10.5px Inter, sans-serif';
       ctx.fillText('Use Left & Right thumbs together to steer both wings', cw / 2, bannerY + 40);
+
+      ctx.restore();
+    }
+
+    // 17. Boss Arena Standoff Header HUD
+    if (isBossArenaActive && arenaBoss && arenaBoss.active) {
+      ctx.save();
+      const isEnraged = arenaBoss.enraged || (arenaBoss.hp < arenaBoss.maxHp * 0.45);
+      const isTitan = arenaBoss.type === 'TITAN';
+      const headerW = Math.min(340, cw - 36);
+      const headerH = 46;
+      const headerY = 16;
+      const headerX = cw / 2 - headerW / 2;
+
+      ctx.shadowColor = isEnraged ? '#ef4444' : '#f59e0b';
+      ctx.shadowBlur = 12;
+      ctx.fillStyle = 'rgba(10, 15, 30, 0.94)';
+      ctx.strokeStyle = isEnraged ? '#ef4444' : (isTitan ? '#f59e0b' : '#38bdf8');
+      ctx.lineWidth = 2.2;
+      ctx.beginPath();
+      ctx.roundRect(headerX, headerY, headerW, headerH, 10);
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = isEnraged ? '#ef4444' : '#f8fafc';
+      ctx.font = '900 11px Inter, sans-serif';
+      ctx.textAlign = 'center';
+      const bossTitle = isEnraged 
+        ? `🔥 PHASE 2: ${arenaBoss.name || 'TITAN'} [ENRAGED]` 
+        : `☠️ STANDOFF: ${arenaBoss.name || (isTitan ? 'TITAN DREADNOUGHT' : 'WARDEN')}`;
+      ctx.fillText(bossTitle, cw / 2, headerY + 16);
+
+      // Boss Health Bar
+      const barW = headerW - 24;
+      const barH = 7;
+      const barX = cw / 2 - barW / 2;
+      const barY = headerY + 24;
+      const fillW = Math.max(0, Math.min(barW, (arenaBoss.hp / arenaBoss.maxHp) * barW));
+
+      ctx.fillStyle = '#1e293b';
+      ctx.fillRect(barX, barY, barW, barH);
+
+      ctx.fillStyle = isEnraged ? '#ef4444' : (isTitan ? '#f59e0b' : '#38bdf8');
+      ctx.fillRect(barX, barY, fillW, barH);
+
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(barX, barY, barW, barH);
+
+      // Health text
+      ctx.fillStyle = '#94a3b8';
+      ctx.font = '800 8.5px "JetBrains Mono", monospace';
+      const pct = Math.round((arenaBoss.hp / arenaBoss.maxHp) * 100);
+      ctx.fillText(`${Math.ceil(arenaBoss.hp)} / ${arenaBoss.maxHp} HP (${pct}%)`, cw / 2, barY + 16);
 
       ctx.restore();
     }

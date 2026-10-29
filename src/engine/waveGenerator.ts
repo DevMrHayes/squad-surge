@@ -373,11 +373,11 @@ export class WaveGenerator {
                        : archetype.id === 'SWARM_INFILTRATION' ? 'CRYO'
                        : archetype.id === 'ARTILLERY_STORM' ? 'BLAST'
                        : 'FIRERATE';
-        const label = buffType === 'SPLIT_SQUAD' ? '⚡ DUAL-THUMB SPLIT SQUAD'
-                    : buffType === 'AP' ? '⚡ AP ROUNDS (2.5x vs 🛡️)'
-                    : buffType === 'CRYO' ? '❄️ CRYO SLOW (-45% SPD)'
-                    : buffType === 'BLAST' ? '💥 BLAST SPLASH AoE'
-                    : '🔥 FIRE RATE +25%';
+        const label = buffType === 'SPLIT_SQUAD' ? '⚡ DUAL SQUAD'
+                    : buffType === 'AP' ? '⚡ AP ROUNDS'
+                    : buffType === 'CRYO' ? '❄️ CRYO SLOW'
+                    : buffType === 'BLAST' ? '💥 BLAST AoE'
+                    : '🔥 FIRE RATE';
         const color = buffType === 'SPLIT_SQUAD' ? '#38bdf8'
                     : buffType === 'AP' ? '#fde047'
                     : buffType === 'CRYO' ? '#22d3ee'

@@ -374,8 +374,28 @@ export class UIController {
     const resCoins = document.getElementById('resCoins')!;
     const resBaseReward = document.getElementById('resBaseReward');
     const resSurvivalBonus = document.getElementById('resSurvivalBonus');
+    const resAccoladesRow = document.getElementById('resAccoladesRow');
+    const resAccoladesList = document.getElementById('resAccoladesList');
     const btnNext = document.getElementById('btnNext')!;
     const btnRetry = document.getElementById('btnRetry')!;
+
+    if (won && details?.accolades && details.accolades.length > 0) {
+      if (resAccoladesRow) resAccoladesRow.classList.remove('hidden');
+      if (resAccoladesList) {
+        resAccoladesList.innerHTML = details.accolades.map((acc: any) => `
+          <div class="flex items-center justify-between py-0.5 text-[11px]">
+            <span class="text-slate-300 flex items-center gap-1.5 font-sans">
+              <span>${acc.icon}</span>
+              <span class="font-bold text-white">${acc.name}</span>
+            </span>
+            <span class="text-amber-400 font-bold font-mono-num">+${acc.coins} 🪙</span>
+          </div>
+        `).join('');
+      }
+    } else {
+      if (resAccoladesRow) resAccoladesRow.classList.add('hidden');
+      if (resAccoladesList) resAccoladesList.innerHTML = '';
+    }
 
     if (details?.isEndless) {
       resIcon.textContent = details.isNewRecord ? '🎖️' : '☠️';
@@ -409,7 +429,8 @@ export class UIController {
       if (bonusLabel) bonusLabel.textContent = 'Squad Survival Bonus:';
 
       const survivalBonus = Math.max(0, this.game.player.count * 2);
-      const baseReward = Math.max(0, coins - survivalBonus);
+      const accoladeBonus = details?.accolades?.reduce((sum: number, a: any) => sum + a.coins, 0) || 0;
+      const baseReward = Math.max(0, coins - survivalBonus - accoladeBonus);
       if (resBaseReward) resBaseReward.textContent = `+${baseReward} 🪙`;
       if (resSurvivalBonus) resSurvivalBonus.textContent = `+${survivalBonus} 🪙 (+${this.game.player.count} 👥)`;
       resCoins.textContent = `+${coins} 🪙`;

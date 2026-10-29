@@ -16,7 +16,8 @@ import {
   EnemyScheduleItem,
   ObstacleQueueItem,
   SaveData,
-  SectorId
+  SectorId,
+  MissionAccolade
 } from '../types/game';
 import { SECTOR_BIOMES } from '../constants/biomes';
 import { WaveGenerator } from './waveGenerator';
@@ -33,6 +34,7 @@ export interface GameOverDetails {
   threatLevel?: number;
   isNewRecord?: boolean;
   prevBest?: number;
+  accolades?: MissionAccolade[];
 }
 
 export class GameLoop {
@@ -51,6 +53,16 @@ export class GameLoop {
   public plan: LevelPlan;
   public elapsed: number = 0;
   public trauma: number = 0;
+
+  // Boss Arena Standoff & Accolade Benchmark Metrics
+  public isBossArenaActive: boolean = false;
+  public arenaBoss: Enemy | null = null;
+  public soldiersLostInLevel: number = 0;
+  public highestSquadInLevel: number = 0;
+  public ricochetKillsInLevel: number = 0;
+  public altarUsedInLevel: boolean = false;
+  public bossDefeatedInLevel: 'TITAN' | 'WARDEN' | 'CAPTAIN' | null = null;
+  public endlessMilestonesClaimed: Set<number> = new Set();
 
   public player: PlayerState;
   public gates: Gate[] = [];
@@ -178,6 +190,16 @@ export class GameLoop {
     this.sessionCoinsEarned = 0;
     this.sessionScore = 0;
 
+    // Reset Boss Arena Standoff & Accolade Metrics
+    this.isBossArenaActive = false;
+    this.arenaBoss = null;
+    this.soldiersLostInLevel = 0;
+    this.highestSquadInLevel = 5;
+    this.ricochetKillsInLevel = 0;
+    this.altarUsedInLevel = false;
+    this.bossDefeatedInLevel = null;
+    this.endlessMilestonesClaimed.clear();
+
     if (isEndless) {
       this.currentLevel = 1;
       this.endlessThreatLevel = 1;
@@ -191,6 +213,7 @@ export class GameLoop {
     }
 
     this.player = this.createDefaultPlayer();
+    this.highestSquadInLevel = this.player.count;
     this.targetX = this.cw / 2;
     this.player.x = this.cw / 2;
 
@@ -458,7 +481,7 @@ export class GameLoop {
     }
   }
 
-  public spawnFloatText(x: number, y: number, text: string, color: string): void {
+  public spawnFloatText(x: number, y: number, text: string, color: string, fontSize: number = 14): void {
     this.floatTexts.push({
       id: Math.random(),
       text,
@@ -466,7 +489,7 @@ export class GameLoop {
       y,
       vy: -35,
       color,
-      fontSize: 14,
+      fontSize,
       alpha: 1.0,
       life: 0.9,
     });
@@ -491,6 +514,7 @@ export class GameLoop {
       this.spawnFloatText(this.player.x, squadY - 28, '🛡️ SHIELD BLOCKED HIT!', '#c084fc');
       return false;
     }
+    this.soldiersLostInLevel += lossCount;
     this.player.count = Math.max(0, this.player.count - lossCount);
     sfx.playLose();
     this.trauma = Math.min(1.0, this.trauma + 0.30);
@@ -566,7 +590,31 @@ export class GameLoop {
         sfx.playGateCharge();
         this.trauma = Math.min(1.0, this.trauma + 0.35);
       }
-      this.plan.scrollSpeed = Math.min(140, 75 + this.endlessThreatLevel * 2.2);
+      if (!this.isBossArenaActive) {
+        this.plan.scrollSpeed = Math.min(140, 75 + this.endlessThreatLevel * 2.2);
+      } else {
+        this.plan.scrollSpeed = 0;
+      }
+
+      // Duration Accolade Milestones: 60s (+10 🪙), 120s (+20 🪙), 180s (+35 🪙), 300s (+60 🪙)
+      const durationMilestones = [
+        { sec: 60, coins: 10, name: 'INITIAL SURGE (1 MIN)' },
+        { sec: 120, coins: 20, name: 'MOMENTUM (2 MIN)' },
+        { sec: 180, coins: 35, name: 'SUSTAINED PRESSURE (3 MIN)' },
+        { sec: 300, coins: 60, name: 'ENDLESS LEGEND (5 MIN)' },
+      ];
+      for (const m of durationMilestones) {
+        if (this.endlessTimeSurvived >= m.sec && !this.endlessMilestonesClaimed.has(m.sec)) {
+          this.endlessMilestonesClaimed.add(m.sec);
+          this.sessionCoinsEarned += m.coins;
+          const save = storage.getSave();
+          save.coins += m.coins;
+          storage.saveLocal();
+          sfx.playGateCharge();
+          this.spawnFloatText(this.player.x, this.player.y - 36, `🎖️ ${m.name}: +${m.coins} 🪙!`, '#fbbf24', 13);
+          this.notifyHUD();
+        }
+      }
 
       // In-Game Personal Best Surpassed Notification & Real-Time Auto-Save
       const prevBest = storage.getSave().stats.endlessBestTime || 0;
@@ -679,6 +727,7 @@ export class GameLoop {
       this.shockwaves
     );
 
+    const prevRicochet = save.stats.ricochetKills || 0;
     CombatEngine.handleEnemyInteractions(
       this.player, 
       this.enemies, 
@@ -691,6 +740,9 @@ export class GameLoop {
       save.stats,
       this.shockwaves
     );
+    if ((save.stats.ricochetKills || 0) > prevRicochet) {
+      this.ricochetKillsInLevel += ((save.stats.ricochetKills || 0) - prevRicochet);
+    }
 
     // 5. Update Descending Gates
     for (let i = this.gates.length - 1; i >= 0; i--) {
@@ -760,6 +812,7 @@ export class GameLoop {
           ? Math.min(3, Math.max(1, g.val))
           : Math.min(40, Math.round(this.player.count * (g.val - 1)));
         this.player.count = Math.min(squadCap, this.player.count + added);
+        this.highestSquadInLevel = Math.max(this.highestSquadInLevel, this.player.count);
         sfx.playGateCharge();
         CombatEngine.updateSquadFormation(this.player);
         this.spawnFloatText(this.player.x, squadY - 28, this.isEndless ? `+${added} SQUAD` : `x${g.val} SQUAD!`, '#34d399');
@@ -772,6 +825,7 @@ export class GameLoop {
           this.player.count = Math.max(1, this.player.count - actualDeduct);
         }
         save.stats.altarsUsed++;
+        this.altarUsedInLevel = true;
         if (g.altarWeaponReward === 'laserWeapon') {
           this.player.buffs.laserWeapon = true;
           this.spawnFloatText(this.player.x, squadY - 30, '⚡ LASER EVOLVED!', '#c084fc');
@@ -786,6 +840,7 @@ export class GameLoop {
         const delta = g.val;
         if (delta > 0) {
           this.player.count = Math.min(squadCap, this.player.count + delta);
+          this.highestSquadInLevel = Math.max(this.highestSquadInLevel, this.player.count);
           sfx.playGateCharge();
           this.spawnFloatText(this.player.x, squadY - 28, `+${delta} SQUAD`, '#38bdf8');
         } else if (delta < 0) {
@@ -827,6 +882,24 @@ export class GameLoop {
     }
 
     // 8. Update Enemies & Mortar Projectiles
+    // Boss Arena Standoff Check: Detect Titan/Warden bosses and halt highway advance
+    const activeBoss = this.enemies.find(e => e.active && e.isBoss && (e.type === 'TITAN' || e.type === 'WARDEN' || e.type === 'CAPTAIN'));
+    if (activeBoss) {
+      if (!this.isBossArenaActive && activeBoss.y >= this.ch * 0.18) {
+        this.isBossArenaActive = true;
+        this.arenaBoss = activeBoss;
+        this.plan.scrollSpeed = 0;
+        sfx.playBossWarning();
+        this.spawnFloatText(this.cw / 2, this.ch * 0.14, `🚨 STANDOFF LOCK: ${activeBoss.name || activeBoss.type}!`, '#ef4444', 16);
+      }
+    } else if (this.isBossArenaActive) {
+      this.isBossArenaActive = false;
+      this.arenaBoss = null;
+      if (this.isEndless) {
+        this.plan.scrollSpeed = Math.min(140, 75 + this.endlessThreatLevel * 2.2);
+      }
+    }
+
     for (let i = this.enemies.length - 1; i >= 0; i--) {
       const e = this.enemies[i];
       if (!e.active) {
@@ -834,8 +907,17 @@ export class GameLoop {
         this.enemiesKilled++;
 
         let bounty = 1;
-        if (e.isBoss) bounty = 25;
-        else if (e.type === 'BRUTE') bounty = 5;
+        if (e.isBoss) {
+          bounty = 25;
+          this.bossDefeatedInLevel = e.type === 'TITAN' ? 'TITAN' : 'WARDEN';
+          if (this.isBossArenaActive && this.arenaBoss?.id === e.id) {
+            this.isBossArenaActive = false;
+            this.arenaBoss = null;
+            if (this.isEndless) {
+              this.plan.scrollSpeed = Math.min(140, 75 + this.endlessThreatLevel * 2.2);
+            }
+          }
+        } else if (e.type === 'BRUTE') bounty = 5;
         else if (e.type === 'SHIELD_BEARER' || e.type === 'HEALER_DRONE') bounty = 6;
         else if (e.type === 'SHOOTER') bounty = 4;
         else if (e.type === 'SPRINTER') bounty = 2;
@@ -856,6 +938,47 @@ export class GameLoop {
 
       if (e.slowTimer > 0) e.slowTimer -= dt;
       const cryoMult = e.slowTimer > 0 ? 0.55 : 1.0;
+
+      // BOSS ARENA STANDOFF COMBAT: Boss halts highway descent and duels squad laterally at standoff distance
+      if (e.isBoss && this.isBossArenaActive && this.arenaBoss?.id === e.id) {
+        e.y = this.ch * 0.20; // Anchored at standoff line
+        const isEnraged = e.enraged || (e.hp < e.maxHp * 0.45);
+        e.bossPhase += dt * (isEnraged ? 2.5 : 1.7);
+        const strafeAmp = (this.cw - 110) * 0.42;
+        e.x = (this.cw / 2) + Math.sin(e.bossPhase) * strafeAmp;
+        e.x = Math.max(54, Math.min(this.cw - 54, e.x));
+
+        // Aimed Mortar Volleys during Standoff
+        e.shootCooldown -= dt;
+        if (e.shootCooldown <= 0) {
+          e.shootCooldown = isEnraged ? 1.25 : (e.type === 'TITAN' ? 1.6 : 1.9);
+          const targetX = this.player.x;
+          const dx = targetX - e.x;
+          const dy = squadY - e.y;
+          const dist = Math.hypot(dx, dy) || 1;
+          const spd = this.isEndless ? 250 : 220;
+          this.enemyMortars.push({
+            x: e.x,
+            y: e.y + e.r,
+            targetX,
+            vx: (dx / dist) * spd * 0.72,
+            vy: spd,
+            squadLoss: isEnraged ? (e.type === 'TITAN' ? 5 : 3) : (e.type === 'TITAN' ? 4 : 2),
+          });
+          if (isEnraged && e.type === 'TITAN') {
+            const spreadOffset = Math.random() < 0.5 ? -35 : 35;
+            this.enemyMortars.push({
+              x: e.x + spreadOffset,
+              y: e.y + e.r,
+              targetX: targetX + spreadOffset * 1.5,
+              vx: ((dx + spreadOffset) / dist) * spd * 0.70,
+              vy: spd * 0.95,
+              squadLoss: 3,
+            });
+          }
+        }
+        continue; // Bypasses standard downward speed advance and perimeter breach check
+      }
 
       // Boss & Unit Tactical Lateral Movement (Strictly clamped within playable highway road)
       if (e.isBoss) {
@@ -975,9 +1098,76 @@ export class GameLoop {
         sfx.playWin();
 
         const survivalBonus = Math.max(0, this.player.count * 2);
-        const totalReward = this.plan.coinReward + survivalBonus;
+        const baseReward = this.plan.coinReward;
+
+        // Tactical Accolade Benchmarks
+        const accolades: MissionAccolade[] = [];
+        if (this.soldiersLostInLevel === 0) {
+          accolades.push({
+            id: 'unbroken_formation',
+            name: 'Unbroken Formation',
+            icon: '🛡️',
+            desc: 'Completed mission with 0 soldiers lost',
+            coins: 50,
+          });
+        }
+        if (this.highestSquadInLevel >= 60) {
+          accolades.push({
+            id: 'massive_mobilization',
+            name: 'Massive Mobilization',
+            icon: '👑',
+            desc: 'Reached 60+ squad troops in mission',
+            coins: 100,
+          });
+        } else if (this.highestSquadInLevel >= 30) {
+          accolades.push({
+            id: 'dominant_force',
+            name: 'Dominant Force',
+            icon: '⚡',
+            desc: 'Reached 30+ squad troops in mission',
+            coins: 40,
+          });
+        }
+        if (this.ricochetKillsInLevel >= 3) {
+          accolades.push({
+            id: 'trickshot_master',
+            name: 'Trickshot Master',
+            icon: '🎯',
+            desc: '3+ kills deflected off Prism / Splitter mirrors',
+            coins: 45,
+          });
+        }
+        if (this.altarUsedInLevel) {
+          accolades.push({
+            id: 'altar_blessing',
+            name: "Altar's Blessing",
+            icon: '🔮',
+            desc: 'Purified and ascended weapon at Sacrifice Altar',
+            coins: 50,
+          });
+        }
+        if (this.bossDefeatedInLevel === 'TITAN') {
+          accolades.push({
+            id: 'titan_slayer',
+            name: 'Titan Slayer',
+            icon: '☠️',
+            desc: 'Defeated Titan Dreadnought in Standoff Arena',
+            coins: 150,
+          });
+        } else if (this.bossDefeatedInLevel === 'WARDEN' || this.bossDefeatedInLevel === 'CAPTAIN') {
+          accolades.push({
+            id: 'warden_slayer',
+            name: 'Warden Slayer',
+            icon: '⚔️',
+            desc: 'Defeated Warden Gatekeeper in Standoff Arena',
+            coins: 75,
+          });
+        }
+
+        const accoladeBonus = accolades.reduce((sum, a) => sum + a.coins, 0);
+        const totalReward = baseReward + survivalBonus + accoladeBonus;
         this.sessionCoinsEarned += totalReward;
-        this.sessionScore += 2500 + (this.player.count * 25);
+        this.sessionScore += 2500 + (this.player.count * 25) + (accoladeBonus * 10);
 
         storage.recordWin(this.currentLevel, totalReward);
         const save = storage.getSave();
@@ -985,7 +1175,12 @@ export class GameLoop {
         storage.saveLocal();
 
         if (this.onGameOver) {
-          this.onGameOver(true, totalReward, `Sector Secured! Base: +${this.plan.coinReward} 🪙 | Squad Survival (${this.player.count} 👥): +${survivalBonus} 🪙`);
+          this.onGameOver(
+            true, 
+            totalReward, 
+            `Sector Secured! Base: +${baseReward} 🪙 | Squad Survival (${this.player.count} 👥): +${survivalBonus} 🪙`, 
+            { accolades }
+          );
         }
       }
     }
@@ -1040,7 +1235,9 @@ export class GameLoop {
       this.particles,
       this.shockwaves,
       this.floatTexts,
-      this.dualThumbBannerTimer
+      this.dualThumbBannerTimer,
+      this.isBossArenaActive,
+      this.arenaBoss
     );
   }
 

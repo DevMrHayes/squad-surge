@@ -347,6 +347,14 @@ export interface LevelPlan {
   coinReward: number;
 }
 
+export interface MissionAccolade {
+  id: string;
+  name: string;
+  icon: string;
+  desc: string;
+  coins: number;
+}
+
 export interface SaveData {
   version: number;
   level: number;
