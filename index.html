@@ -54,40 +54,44 @@
 </head>
 <body class="flex items-center justify-center w-full h-full bg-slate-950">
 
-  <!-- MOBILE APP SHELL (M3 Surface-Container-Lowest) -->
-  <div id="appShell" class="relative w-full h-full max-w-[440px] flex flex-col bg-[#050813] shadow-2xl overflow-hidden border-x border-slate-800/50">
+  <!-- MOBILE APP SHELL (Material Minimal Surface) -->
+  <div id="appShell" class="relative w-full h-full max-w-[440px] flex flex-col bg-[#0b101e] shadow-2xl overflow-hidden border-x border-slate-800/50">
 
-    <!-- TOP ULTRA-CLEAN HUD (M3 Surface Elevation 1) -->
-    <header class="z-20 px-3.5 pt-3 pb-2.5 bg-[#090e1c]/90 backdrop-blur-md border-b border-white/5 flex flex-col gap-2 shrink-0">
+    <!-- TOP MATERIAL MINIMAL HUD -->
+    <header class="z-20 px-4 py-2.5 bg-[#0b101e] border-b border-white/[0.06] flex flex-col gap-2 shrink-0">
       <div class="flex items-center justify-between gap-2.5">
-        <!-- Level Selector Chip -->
-        <button id="btnOpenMap" class="btn-tap flex items-center gap-1.5 h-10 px-3.5 rounded-full bg-[#11192b] border border-white/10 text-xs font-black text-white shadow-sm hover:border-sky-400/40" aria-label="Select Level">
-          <span>Level <span id="uiLevelNum" class="text-sky-400 font-mono-num font-black">1</span></span>
-          <span class="text-slate-400 text-[10px]">▾</span>
+        <!-- Left: Level Selector Pill -->
+        <button id="btnOpenMap" class="btn-tap flex items-center gap-1.5 h-10 px-4 rounded-full bg-[#161f33] border border-white/[0.08] text-xs font-semibold text-slate-100 shadow-sm hover:border-white/20" aria-label="Select Level">
+          <span>Level <span id="uiLevelNum" class="font-mono-num font-bold text-white">1</span></span>
+          <span class="text-slate-400 text-[10px] ml-0.5">▾</span>
         </button>
 
-        <!-- Center Combat Progress (M3 Linear Indicator) -->
-        <div class="flex-1 px-1">
-          <div class="flex items-center justify-between text-[10px] font-extrabold tracking-wider uppercase mb-1.5">
+        <!-- Center: Combat Progress (Hidden on Dashboard, shown during active combat) -->
+        <div id="hudCombatProgress" class="hidden flex-1 px-1">
+          <div class="flex items-center justify-between text-[10px] font-extrabold tracking-wider uppercase mb-1">
             <span class="text-slate-400">Enemies Left</span>
             <span id="uiEnemiesLeft" class="text-rose-400 font-mono-num font-black">0</span>
           </div>
-          <div class="w-full h-2 rounded-full bg-[#111a2d] overflow-hidden p-[1px]">
-            <div id="uiProgressFill" class="h-full rounded-full bg-gradient-to-r from-sky-400 via-sky-300 to-emerald-400 transition-all duration-200" style="width: 0%"></div>
+          <div class="w-full h-1.5 rounded-full bg-[#151d30] overflow-hidden">
+            <div id="uiProgressFill" class="h-full rounded-full bg-[#6ea8fe] transition-all duration-200" style="width: 0%"></div>
           </div>
         </div>
 
-        <!-- Gold Currency & Account Strip -->
-        <div class="flex items-center gap-1.5">
-          <div class="flex items-center gap-1 h-10 px-3 rounded-full bg-[#11192b] border border-amber-500/30 text-xs font-black text-amber-300 font-mono-num shadow-sm">
-            <span>🪙</span>
+        <!-- Right: Gold Coin Pill + Circular User Icon + Pause Button -->
+        <div class="flex items-center gap-2">
+          <div class="flex items-center gap-2 h-10 px-3.5 rounded-full bg-[#161f33] border border-white/[0.08] text-xs font-bold text-slate-100 font-mono-num shadow-sm">
+            <span class="w-4 h-4 rounded-full bg-[#f5b041] shadow-inner shrink-0 inline-block"></span>
             <span id="uiCoins">150</span>
           </div>
-          <button id="btnAccountHeader" class="btn-tap flex items-center gap-1.5 h-10 px-3 rounded-full bg-[#11192b] border border-sky-400/30 text-xs font-black text-sky-300 shadow-sm" aria-label="Commander Account">
-            <span id="headerAccountIcon">👤</span>
-            <span id="headerAccountLabel" class="max-w-[70px] truncate">Sign In</span>
+          <button id="btnAccountHeader" class="btn-tap w-10 h-10 rounded-full bg-[#161f33] border border-white/[0.08] flex items-center justify-center text-slate-300 hover:text-white shadow-sm" aria-label="Commander Account">
+            <span id="headerAccountIcon" class="flex items-center justify-center">
+              <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                <path fill-rule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clip-rule="evenodd" />
+              </svg>
+            </span>
+            <span id="headerAccountLabel" class="sr-only">Sign In</span>
           </button>
-          <button id="btnPause" class="btn-tap hidden h-10 px-3 rounded-full bg-[#11192b] border border-white/10 flex items-center justify-center gap-1 text-xs text-slate-300" title="Pause Tactical Mission" aria-label="Pause Tactical Mission">
+          <button id="btnPause" class="btn-tap hidden h-10 px-3 rounded-full bg-[#161f33] border border-white/10 flex items-center justify-center gap-1 text-xs text-slate-200" title="Pause Tactical Mission" aria-label="Pause Tactical Mission">
             <span>⏸</span>
             <span class="text-[10px] font-bold hidden sm:inline">PAUSE</span>
           </button>
@@ -99,87 +103,112 @@
     <div id="canvasWrap" class="relative flex-1 w-full h-full overflow-hidden">
       <canvas id="gameCanvas" class="block w-full h-full"></canvas>
 
-      <!-- PRE-LEVEL BRIEFING OVERLAY (M3 Modal Surface) -->
-      <div id="startOverlay" class="absolute inset-0 z-10 flex flex-col justify-between p-4 bg-[#050813]/85 backdrop-blur-[6px] overflow-y-auto">
+      <!-- MATERIAL MINIMAL GAME DASHBOARD OVERLAY -->
+      <div id="startOverlay" class="absolute inset-0 z-10 flex flex-col justify-between p-4 bg-[#0b101e]/95 backdrop-blur-md overflow-y-auto gap-3">
         
-        <!-- 1. M3 Segmented Mode Switcher (Campaign vs Endless) -->
-        <div class="flex items-center p-1 bg-[#0a0f1d] border border-white/10 rounded-full shrink-0 shadow-lg mb-2">
-          <button id="tabModeCampaign" class="flex-1 h-11 px-3 rounded-full text-xs font-black tracking-wider uppercase transition-all duration-200 bg-gradient-to-r from-sky-400 to-sky-500 text-slate-950 shadow-md shadow-sky-500/20 flex items-center justify-center gap-1.5">
-            <span>🛡️</span>
-            <span>Campaign</span>
-          </button>
-          <button id="tabModeEndless" class="flex-1 h-11 px-3 rounded-full text-xs font-black tracking-wider uppercase transition-all duration-200 text-slate-400 hover:text-white flex items-center justify-center gap-1.5">
-            <span>♾️</span>
-            <span>Endless Survival</span>
-          </button>
-        </div>
-
-        <!-- 2. Mission Intelligence & Squad Readiness Hero Card -->
-        <div class="bg-[#0e1628]/95 border border-white/10 rounded-[24px] p-4 shadow-xl flex flex-col gap-2.5">
-          <div class="flex items-center justify-between">
-            <span id="startBadge" class="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-sky-400/10 text-sky-300 border border-sky-400/30">
-              Sector 1 • Vanguard
-            </span>
-            <span id="startReward" class="px-2.5 py-1 rounded-full bg-amber-400/10 border border-amber-400/20 text-xs font-black text-amber-300 font-mono-num">
-              +64 🪙
-            </span>
-          </div>
-
-          <div>
-            <h2 id="startTitle" class="text-lg font-black text-white tracking-tight">MISSION 1</h2>
-            <div id="startRuleTitle" class="text-xs font-extrabold text-sky-300 mt-0.5">Split-Lane Dilemma</div>
-            <p id="startRuleDesc" class="text-[11px] text-slate-400 leading-relaxed mt-1">Enemies rush the opposite lane while gates absorb your firepower. Slide carefully.</p>
-          </div>
-
-          <!-- M3 Linear Progress Readiness Meter -->
-          <div id="startPowerCheck" class="flex flex-col gap-1.5 px-3 py-2.5 rounded-2xl bg-[#070b14] border border-white/5">
-            <div class="flex items-center justify-between text-[11px] font-black">
-              <span id="startPowerText" class="text-slate-300 font-mono-num">SQUAD POWER: ⚡ 4 / REQ: 🛡️ 4</span>
-              <span id="startPowerStatus" class="text-emerald-400 uppercase tracking-wider">✓ COMBAT READY</span>
-            </div>
-            <!-- Dynamic Linear Progress Bar -->
-            <div class="w-full h-1.5 rounded-full bg-slate-800/80 overflow-hidden">
-              <div id="startPowerMeterBar" class="h-full rounded-full bg-gradient-to-r from-sky-400 to-emerald-400 transition-all duration-300" style="width: 100%"></div>
-            </div>
-          </div>
-        </div>
-
-        <!-- 3. Commander Cloud Status Strip -->
-        <div id="briefingProfileCard" class="bg-[#0a0f1d]/90 border border-white/5 rounded-2xl p-2.5 flex items-center justify-between shadow-md my-1.5">
-          <div class="flex items-center gap-2.5 min-w-0">
-            <div id="briefingAvatar" class="w-9 h-9 rounded-full bg-slate-800/90 border border-slate-700/60 flex items-center justify-center text-sm shrink-0 shadow-inner">
-              👤
-            </div>
-            <div class="flex flex-col min-w-0">
-              <div class="flex items-center gap-1.5">
-                <span id="briefingCommanderName" class="text-xs font-black text-white truncate">Guest Commander</span>
-                <span id="briefingStatusPill" class="px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase tracking-wide bg-slate-800 text-slate-400 border border-slate-700">Offline</span>
-              </div>
-              <div id="briefingCommanderEmail" class="text-[10px] text-amber-400/90 truncate mt-0.5">⚠️ Progress saved locally only</div>
-            </div>
-          </div>
-          <div class="flex items-center gap-1.5 shrink-0" id="briefingBtnContainer">
-            <button id="btnBriefingAction" class="btn-tap min-h-[44px] px-3.5 rounded-xl bg-gradient-to-r from-sky-400 to-sky-500 text-slate-950 font-black text-xs uppercase shadow-sm">
-              Sign In
+        <div class="flex flex-col gap-3">
+          <!-- 1. Segmented Mode Switcher (Campaign vs Endless Survival) -->
+          <div class="flex items-center p-1 bg-[#151d30] border border-white/[0.06] rounded-full shrink-0 shadow-inner">
+            <button id="tabModeCampaign" class="btn-tap flex-1 h-10 px-3 rounded-full text-xs font-bold tracking-wider uppercase transition-all duration-200 bg-[#1565c0] text-white shadow-md flex items-center justify-center">
+              <span>CAMPAIGN</span>
+            </button>
+            <button id="tabModeEndless" class="btn-tap flex-1 h-10 px-3 rounded-full text-xs font-semibold tracking-wider uppercase transition-all duration-200 text-slate-400 hover:text-white flex items-center justify-center">
+              <span>ENDLESS SURVIVAL</span>
             </button>
           </div>
+
+          <!-- 2. Mission Hero Card (#missionHeroCard) -->
+          <div id="missionHeroCard" class="bg-[#161f33] border border-white/[0.07] rounded-2xl p-4 shadow-lg flex flex-col gap-3">
+            <div class="flex flex-col gap-2.5">
+              <div class="flex items-start justify-between gap-2">
+                <h2 id="startTitle" class="text-[26px] font-normal text-slate-100 tracking-wide uppercase leading-[1.12]">TITAN SHOWDOWN</h2>
+                <span id="startReward" class="shrink-0 px-2.5 py-0.5 rounded-full bg-[#0b101d] border border-white/10 text-[11px] font-bold text-amber-300 font-mono-num">
+                  +64 🪙
+                </span>
+              </div>
+
+              <!-- High-Contrast Dual Pills -->
+              <div class="flex flex-wrap items-center gap-2">
+                <span id="startBadge" class="px-3 py-0.5 rounded-full text-[11px] font-bold bg-[#7ce7ac] text-[#092216]">
+                  Split-Lane Dilemma
+                </span>
+                <span id="startSecondaryPill" class="px-3 py-0.5 rounded-full text-[11px] font-bold bg-[#eb8686] text-[#2c0b0b]">
+                  Tactical Threat
+                </span>
+              </div>
+            </div>
+
+            <!-- Auxiliary rule elements preserved for telemetry & compatibility -->
+            <div id="startRuleBox" class="hidden">
+              <div id="startRuleTitle">Split-Lane Dilemma</div>
+              <p id="startRuleDesc">Enemies rush the opposite lane while gates absorb your firepower.</p>
+            </div>
+
+            <!-- Campaign Linear Readiness Meter -->
+            <div id="startPowerCheck" class="flex flex-col gap-2 pt-1">
+              <div class="flex items-center justify-between text-[11px] font-bold tracking-wide">
+                <span id="startPowerText" class="text-slate-300 font-mono-num">SQUAD POWER: ⚡ 4 / REQ: 🛡️ 4</span>
+                <span id="startPowerStatus" class="text-[#7ce7ac] text-[10px] font-extrabold uppercase tracking-wider">✓ READY</span>
+              </div>
+              <div class="w-full h-2 rounded-full bg-[#0b101e] overflow-hidden">
+                <div id="startPowerMeterBar" class="h-full rounded-full bg-[#6ea8fe] transition-all duration-300" style="width: 100%"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 3. Endless Survival Objective Card (#endlessObjectiveCard) -->
+          <div id="endlessObjectiveCard" class="hidden bg-[#161f33] border border-white/[0.07] rounded-2xl p-4 shadow-lg relative overflow-hidden flex-col gap-1.5">
+            <span class="absolute top-0 right-0 px-3 py-1 rounded-bl-xl bg-[#a61b1b] text-white text-[9px] font-extrabold uppercase tracking-wider shadow-sm">
+              SECTOR: INFINITE VOID
+            </span>
+            <div class="text-xs font-normal uppercase tracking-wider text-slate-300">OBJECTIVE</div>
+            <p class="text-xs text-slate-200 leading-relaxed pr-2">
+              Survive the continuous onslaught. Endless waves of escalating difficulty. (High Reward)
+            </p>
+            <div id="endlessHiScoreLine" class="text-xs font-bold text-[#f5b041] mt-1">
+              HI-SCORE: 00:00.0 (Threat 1)
+            </div>
+            <div id="endlessMultipliersLine" class="text-[11px] text-slate-400">
+              Active Multipliers: Squad Perks Enabled
+            </div>
+          </div>
+
+          <!-- 4. Compact Commander / Chief Admin Strip (#briefingProfileCard) -->
+          <div id="briefingProfileCard" class="bg-[#161f33] border border-white/[0.07] rounded-2xl px-3.5 py-2.5 flex items-center justify-between gap-2 shadow-md">
+            <div class="flex items-center gap-2.5 min-w-0">
+              <div id="briefingAvatar" class="w-9 h-9 rounded-full bg-[#24324f] border border-white/15 flex items-center justify-center text-sm shrink-0 overflow-hidden">
+                👤
+              </div>
+              <div class="flex items-center gap-2 min-w-0">
+                <span id="briefingCommanderName" class="sr-only">Commander</span>
+                <span id="briefingStatusPill" class="px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-[#2b3c35] text-[#a3e6b7] border border-[#456355]/50">
+                  GUEST MODE
+                </span>
+                <span id="briefingCommanderEmail" class="sr-only">Offline</span>
+              </div>
+            </div>
+            <div class="flex items-center gap-2 shrink-0" id="briefingBtnContainer">
+              <button id="btnBriefingAction" class="btn-tap px-3.5 py-1.5 rounded-full bg-[#d0bfff] text-[#1a112e] font-extrabold text-[10px] uppercase tracking-wider shadow-sm">
+                SIGN IN
+              </button>
+            </div>
+          </div>
+
+          <!-- 5. Material Minimal 2x2 Upgrades Grid -->
+          <div class="flex flex-col gap-2 pt-0.5">
+            <div class="flex items-center justify-between px-0.5">
+              <span class="text-xs font-semibold text-slate-300 uppercase tracking-wider">UPGRADES</span>
+              <span class="text-[11px] text-slate-400 font-normal">Tap icon to upgrade</span>
+            </div>
+            <div id="startUpgrades" class="grid grid-cols-2 gap-2.5">
+              <!-- Dynamically populated with Material Minimal high-contrast upgrade cards -->
+            </div>
+          </div>
         </div>
 
-        <!-- 4. Tactical Division Upgrades (M3 2x2 Grid) -->
-        <div class="my-auto py-1">
-          <div class="flex items-center justify-between px-1 mb-2">
-            <span class="text-[11px] font-black text-slate-400 uppercase tracking-wider">Tactical Upgrades</span>
-            <span class="text-[10px] text-slate-500 font-bold">Tap icon to upgrade</span>
-          </div>
-          <div id="startUpgrades" class="grid grid-cols-2 gap-2.5">
-            <!-- Dynamically populated with M3 upgrade cards -->
-          </div>
-        </div>
-
-        <!-- 5. Prominent Primary Action Button (M3 Extended Pill FAB) -->
-        <div class="pt-2">
-          <button id="btnTapToStart" class="btn-tap w-full h-14 rounded-full bg-gradient-to-r from-sky-400 via-sky-500 to-indigo-500 text-slate-950 font-black text-base tracking-wider uppercase shadow-xl shadow-sky-500/25 flex items-center justify-center gap-2">
-            <span>🚀</span>
+        <!-- 6. Bottom Primary Action Button -->
+        <div class="pt-1 shrink-0">
+          <button id="btnTapToStart" class="btn-tap w-full h-12 rounded-full bg-[#1565c0] hover:bg-[#1976d2] text-white font-bold text-sm tracking-wider uppercase shadow-lg shadow-blue-950/60 flex items-center justify-center gap-2">
             <span>DEPLOY SQUAD</span>
           </button>
         </div>

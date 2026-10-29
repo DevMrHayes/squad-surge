@@ -965,6 +965,27 @@ it('Cross-device cloud sync merges level/maxLevel and aligns with Firestore Secu
   );
 });
 
+// 38. Material Minimal (Modern & High-Contrast) Game Dashboard Verification
+it('Material Minimal dashboard renders Campaign & Endless Survival views and high-contrast upgrade cards', () => {
+  const fs = require('fs');
+  const path = require('path');
+  const htmlSrc = fs.readFileSync(path.join(__dirname, '../index.html'), 'utf8');
+  const uiSrc = fs.readFileSync(path.join(__dirname, '../src/ui/uiController.ts'), 'utf8');
+
+  // 1. Hero card & high-contrast dual pills
+  assert.ok(htmlSrc.includes('id="missionHeroCard"'), 'index.html contains missionHeroCard');
+  assert.ok(htmlSrc.includes('id="startSecondaryPill"'), 'index.html contains startSecondaryPill');
+
+  // 2. Endless Survival Objective card with SECTOR: INFINITE VOID badge & HI-SCORE line
+  assert.ok(htmlSrc.includes('id="endlessObjectiveCard"'), 'index.html contains endlessObjectiveCard');
+  assert.ok(htmlSrc.includes('SECTOR: INFINITE VOID'), 'index.html contains SECTOR: INFINITE VOID badge');
+  assert.ok(htmlSrc.includes('id="endlessHiScoreLine"'), 'index.html contains endlessHiScoreLine');
+
+  // 3. Material Minimal 2x2 Upgrade Cards with custom tinted SVG containers and coin pills
+  assert.ok(uiSrc.includes('bg-[#1e3a4c]') && uiSrc.includes('bg-[#3b2334]'), 'uiController renders tinted Material Minimal upgrade icon containers');
+  assert.ok(uiSrc.includes('text-[#63e6be]'), 'uiController renders high-contrast mint-cyan affordable upgrade cost pill');
+});
+
 console.log('====================================================');
 console.log(`  Tests Completed: ${passedTests} / ${totalTests} Passed`);
 console.log('====================================================');

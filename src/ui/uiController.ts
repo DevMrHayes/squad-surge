@@ -109,52 +109,96 @@ export class UIController {
       isEndless ? this.game.endlessThreatLevel : 1
     );
 
-    // Update Mode Tabs Visual State to M3 Segmented Control
+    // Hide active combat progress bar while on the Material Minimal dashboard
+    document.getElementById('hudCombatProgress')?.classList.add('hidden');
+
+    // Update Mode Tabs Visual State to Material Minimal Segmented Control
     const tabCampaign = document.getElementById('tabModeCampaign');
     const tabEndless = document.getElementById('tabModeEndless');
     if (tabCampaign && tabEndless) {
       if (isEndless) {
-        tabCampaign.className = 'flex-1 h-11 px-3 rounded-full text-xs font-bold tracking-wider uppercase transition-all duration-200 text-slate-400 hover:text-white flex items-center justify-center gap-1.5';
-        tabEndless.className = 'flex-1 h-11 px-3 rounded-full text-xs font-black tracking-wider uppercase transition-all duration-200 bg-gradient-to-r from-sky-400 to-sky-500 text-slate-950 shadow-md shadow-sky-500/20 flex items-center justify-center gap-1.5';
+        tabCampaign.className = 'btn-tap flex-1 h-10 px-3 rounded-full text-xs font-semibold tracking-wider uppercase transition-all duration-200 text-slate-400 hover:text-white flex items-center justify-center';
+        tabEndless.className = 'btn-tap flex-1 h-10 px-3 rounded-full text-xs font-bold tracking-wider uppercase transition-all duration-200 bg-[#1565c0] text-white shadow-md flex items-center justify-center';
       } else {
-        tabCampaign.className = 'flex-1 h-11 px-3 rounded-full text-xs font-black tracking-wider uppercase transition-all duration-200 bg-gradient-to-r from-sky-400 to-sky-500 text-slate-950 shadow-md shadow-sky-500/20 flex items-center justify-center gap-1.5';
-        tabEndless.className = 'flex-1 h-11 px-3 rounded-full text-xs font-bold tracking-wider uppercase transition-all duration-200 text-slate-400 hover:text-white flex items-center justify-center gap-1.5';
+        tabCampaign.className = 'btn-tap flex-1 h-10 px-3 rounded-full text-xs font-bold tracking-wider uppercase transition-all duration-200 bg-[#1565c0] text-white shadow-md flex items-center justify-center';
+        tabEndless.className = 'btn-tap flex-1 h-10 px-3 rounded-full text-xs font-semibold tracking-wider uppercase transition-all duration-200 text-slate-400 hover:text-white flex items-center justify-center';
       }
     }
 
     const badgeEl = document.getElementById('startBadge')!;
+    const secondaryPillEl = document.getElementById('startSecondaryPill');
     const rewardEl = document.getElementById('startReward')!;
     const titleEl = document.getElementById('startTitle')!;
     const ruleTitleEl = document.getElementById('startRuleTitle')!;
     const ruleDescEl = document.getElementById('startRuleDesc')!;
+    const powerCheckEl = document.getElementById('startPowerCheck');
+    const endlessObjCard = document.getElementById('endlessObjectiveCard');
+    const endlessHiScoreLine = document.getElementById('endlessHiScoreLine');
     const deployBtn = document.getElementById('btnTapToStart');
 
     if (isEndless) {
-      badgeEl.textContent = '♾️ ENDLESS HIGHWAY';
-      badgeEl.style.borderColor = '#38bdf860';
-      badgeEl.style.color = '#38bdf8';
+      titleEl.textContent = 'ENDLESS SURVIVAL';
+      badgeEl.textContent = 'Hazard: High';
+      badgeEl.className = 'px-3 py-0.5 rounded-full text-[11px] font-bold bg-[#eb8686] text-[#2c0b0b]';
+      badgeEl.removeAttribute('style');
+
+      if (secondaryPillEl) {
+        secondaryPillEl.textContent = 'Wave-Based';
+        secondaryPillEl.className = 'px-3 py-0.5 rounded-full text-[11px] font-bold bg-[#6eb5ff] text-[#081c36]';
+      }
 
       const bestTime = this.formatSurvivalTime(save.stats.endlessBestTime || 0);
       const bestLevel = save.stats.endlessBestLevel || 1;
       rewardEl.textContent = `BEST: ${bestTime} ⏱️`;
-      titleEl.textContent = 'INFINITE HIGHWAY SURVIVAL';
-      ruleTitleEl.textContent = `Dynamic Threat Escalation • Best: ${bestTime} (Threat ${bestLevel})`;
-      ruleDescEl.textContent = 'Enemies, Brutes, and Bosses scale continuously every 10 seconds. Survive as long as you can to set the high score!';
-      if (deployBtn) deployBtn.innerHTML = '<span>🚀 DEPLOY SURVIVAL SQUAD</span>';
-    } else {
-      badgeEl.textContent = `${plan.biome.name} • ${plan.archetype.badge}`;
-      badgeEl.style.borderColor = `${plan.archetype.badgeColor}60`;
-      badgeEl.style.color = plan.archetype.badgeColor;
+      rewardEl.classList.add('hidden');
 
-      rewardEl.textContent = `+${plan.coinReward} 🪙`;
+      ruleTitleEl.textContent = `Dynamic Threat Escalation • Best: ${bestTime} (Threat ${bestLevel})`;
+      ruleDescEl.textContent = 'Survive the continuous onslaught. Endless waves of escalating difficulty. (High Reward)';
+
+      powerCheckEl?.classList.add('hidden');
+      if (endlessObjCard) {
+        endlessObjCard.classList.remove('hidden');
+        endlessObjCard.classList.add('flex');
+      }
+      if (endlessHiScoreLine) {
+        endlessHiScoreLine.textContent =
+          (save.stats.endlessBestTime || 0) > 0
+            ? `HI-SCORE: ${bestTime} (Threat ${bestLevel})`
+            : `HI-SCORE: 00:00.0 (Threat 1)`;
+      }
+      if (deployBtn) deployBtn.innerHTML = '<span>DEPLOY SQUAD</span>';
+    } else {
       titleEl.textContent = plan.isTitanLevel
         ? 'TITAN SHOWDOWN'
         : plan.isBossLevel
           ? 'WARDEN ASSAULT'
-          : `${plan.archetype.title} (LV. ${plan.level})`;
+          : `${plan.archetype.title}`;
+
+      badgeEl.textContent = `${plan.archetype.title}`;
+      badgeEl.className = 'px-3 py-0.5 rounded-full text-[11px] font-bold bg-[#7ce7ac] text-[#092216]';
+      badgeEl.removeAttribute('style');
+
+      if (secondaryPillEl) {
+        secondaryPillEl.textContent = plan.isTitanLevel
+          ? 'Titan Siege'
+          : plan.isBossLevel
+            ? 'Warden Boss'
+            : `${plan.biome.name}`;
+        secondaryPillEl.className = 'px-3 py-0.5 rounded-full text-[11px] font-bold bg-[#eb8686] text-[#2c0b0b]';
+      }
+
+      rewardEl.textContent = `+${plan.coinReward} 🪙`;
+      rewardEl.classList.remove('hidden');
+
       ruleTitleEl.textContent = `${plan.biome.ruleTitle} | ${plan.archetype.title}`;
       ruleDescEl.textContent = `${plan.archetype.advisory} (FEATURED: ${plan.archetype.featuredBuff})`;
-      if (deployBtn) deployBtn.innerHTML = '<span>🚀 DEPLOY SQUAD</span>';
+
+      powerCheckEl?.classList.remove('hidden');
+      if (endlessObjCard) {
+        endlessObjCard.classList.add('hidden');
+        endlessObjCard.classList.remove('flex');
+      }
+      if (deployBtn) deployBtn.innerHTML = '<span>DEPLOY SQUAD</span>';
     }
 
     // Render prominent commander status card
@@ -184,7 +228,7 @@ export class UIController {
 
     const playerPower = this.getPlayerCombatPower();
     const reqPower = this.game.plan.recommendedPower || 4;
-    powerText.textContent = `SQUAD POWER: ⚡ ${playerPower} / REQ: 🛡️ ${reqPower}`;
+    powerText.innerHTML = `SQUAD POWER: <span class="text-amber-400">⚡</span> <span class="text-white font-extrabold">${playerPower}</span> <span class="text-slate-500">/</span> REQ: <span class="text-sky-400">🛡️</span> <span class="text-white font-extrabold">${reqPower}</span>`;
 
     // Ratio for linear progress meter (capped at 100%)
     const pct = Math.min(100, Math.round((playerPower / reqPower) * 100));
@@ -194,19 +238,16 @@ export class UIController {
 
     if (playerPower >= reqPower) {
       powerStatus.textContent = '✓ COMBAT READY';
-      powerStatus.className = 'text-emerald-400 uppercase tracking-wider text-[10px] font-black';
-      powerBox.className = 'flex flex-col gap-1.5 px-3 py-2.5 rounded-2xl bg-emerald-950/25 border border-emerald-500/30';
-      if (meterBar) meterBar.className = 'h-full rounded-full bg-gradient-to-r from-sky-400 to-emerald-400 transition-all duration-300';
+      powerStatus.className = 'text-[#7ce7ac] uppercase tracking-wider text-[10px] font-extrabold';
+      if (meterBar) meterBar.className = 'h-full rounded-full bg-[#6ea8fe] transition-all duration-300';
     } else if (playerPower === reqPower - 1) {
       powerStatus.textContent = '⚠️ UPGRADE ADVISED';
-      powerStatus.className = 'text-amber-400 uppercase tracking-wider text-[10px] font-black';
-      powerBox.className = 'flex flex-col gap-1.5 px-3 py-2.5 rounded-2xl bg-amber-950/25 border border-amber-500/30';
-      if (meterBar) meterBar.className = 'h-full rounded-full bg-gradient-to-r from-sky-400 to-amber-400 transition-all duration-300';
+      powerStatus.className = 'text-amber-400 uppercase tracking-wider text-[10px] font-extrabold';
+      if (meterBar) meterBar.className = 'h-full rounded-full bg-amber-400 transition-all duration-300';
     } else {
       powerStatus.textContent = '💀 FARM PREV. LEVELS';
-      powerStatus.className = 'text-rose-400 uppercase tracking-wider text-[10px] font-black';
-      powerBox.className = 'flex flex-col gap-1.5 px-3 py-2.5 rounded-2xl bg-rose-950/30 border border-rose-500/35';
-      if (meterBar) meterBar.className = 'h-full rounded-full bg-gradient-to-r from-amber-400 to-rose-400 transition-all duration-300';
+      powerStatus.className = 'text-[#eb8686] uppercase tracking-wider text-[10px] font-extrabold';
+      if (meterBar) meterBar.className = 'h-full rounded-full bg-[#eb8686] transition-all duration-300';
     }
   }
 
@@ -215,11 +256,57 @@ export class UIController {
     const upgContainer = document.getElementById('startUpgrades')!;
     upgContainer.innerHTML = '';
 
-    const upgs: { key: keyof typeof save.upgrades; label: string; icon: string }[] = [
-      { key: 'startSquad', label: 'Squad Size', icon: '👥' },
-      { key: 'firepower', label: 'Firepower', icon: '💥' },
-      { key: 'fireRate', label: 'Fire Rate', icon: '⚡' },
-      { key: 'armorPierce', label: 'AP Rounds', icon: '🛡️' },
+    const upgs: {
+      key: keyof typeof save.upgrades;
+      label: string;
+      iconBg: string;
+      svg: string;
+    }[] = [
+      {
+        key: 'startSquad',
+        label: 'Squad Size',
+        iconBg: 'bg-[#1e3a4c]',
+        svg: `
+          <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none">
+            <circle cx="9" cy="8.5" r="3.2" fill="#9c59d1"/>
+            <path d="M3.5 19C3.5 16.2 5.9 14.2 9 14.2C12.1 14.2 14.5 16.2 14.5 19" fill="#9c59d1"/>
+            <circle cx="16.5" cy="9.5" r="2.6" fill="#8446b8"/>
+            <path d="M13.2 19C13.5 16.8 15.1 15.3 17.2 15.3C19.3 15.3 20.8 16.8 20.8 19" fill="#8446b8"/>
+          </svg>
+        `,
+      },
+      {
+        key: 'firepower',
+        label: 'Firepower',
+        iconBg: 'bg-[#3b2334]',
+        svg: `
+          <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none">
+            <path d="M12 2.5L14.3 8.2L20.2 6.3L16.7 11.4L21.2 15.2L15.1 15.6L14 21.5L10.6 16.3L4.5 17.8L7.8 12.4L3.5 8L9.6 8.6L12 2.5Z" fill="#f03e3e"/>
+            <circle cx="12" cy="12" r="2.6" fill="#ff8787"/>
+          </svg>
+        `,
+      },
+      {
+        key: 'fireRate',
+        label: 'Fire Rate',
+        iconBg: 'bg-[#3b3526]',
+        svg: `
+          <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none">
+            <path d="M13.5 2.5L5.5 13.2H12L10.5 21.5L18.5 10.8H12L13.5 2.5Z" fill="#f59f00"/>
+          </svg>
+        `,
+      },
+      {
+        key: 'armorPierce',
+        label: 'AP Rounds',
+        iconBg: 'bg-[#233549]',
+        svg: `
+          <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none">
+            <path d="M12 3L5 6V11.4C5 16.1 8 20.3 12 21.8C16 20.3 19 16.1 19 11.4V6L12 3Z" fill="#74c0fc"/>
+            <path d="M12 3V21.8C16 20.3 19 16.1 19 11.4V6L12 3Z" fill="#339af0"/>
+          </svg>
+        `,
+      },
     ];
 
     upgs.forEach(u => {
@@ -228,26 +315,29 @@ export class UIController {
       const canAfford = save.coins >= cost;
 
       const btn = document.createElement('button');
-      btn.className = `btn-tap m3-upgrade-card flex items-center justify-between p-2.5 rounded-2xl border min-h-[64px] ${
-        canAfford 
-          ? 'bg-[#121c30] border-white/10 shadow-sm' 
-          : 'bg-[#0a0f1d]/60 border-white/5 opacity-55'
+      btn.className = `btn-tap m3-upgrade-card flex items-center justify-between p-2.5 rounded-2xl border min-h-[64px] transition-all ${
+        canAfford
+          ? 'bg-[#161f33] border-white/[0.08] shadow-md hover:border-white/20'
+          : 'bg-[#161f33]/65 border-white/[0.04] opacity-65'
       }`;
 
       btn.innerHTML = `
         <div class="flex items-center gap-2.5 min-w-0">
-          <div class="w-9 h-9 rounded-xl bg-sky-400/10 border border-sky-400/25 flex items-center justify-center text-sm shrink-0 shadow-inner">
-            <span>${u.icon}</span>
+          <div class="w-10 h-10 rounded-xl ${u.iconBg} flex items-center justify-center shrink-0 shadow-inner">
+            ${u.svg}
           </div>
           <div class="text-left min-w-0">
-            <div class="text-xs font-black text-white truncate">${u.label}</div>
-            <div class="text-[10px] text-slate-400 font-bold">
-              Lv. <span class="font-mono-num text-sky-400 font-black">${lvl}</span>
+            <div class="text-xs font-bold text-slate-100 truncate">${u.label}</div>
+            <div class="text-[11px] text-slate-400 font-medium">
+              Lv. <span class="font-mono-num text-slate-300 font-bold">${lvl}</span>
             </div>
           </div>
         </div>
-        <div class="px-2.5 py-1.5 rounded-xl bg-[#060913] border border-amber-400/20 font-mono-num text-xs font-black text-amber-300 shadow-inner shrink-0">
-          ${cost} 🪙
+        <div class="px-2.5 py-1 rounded-full bg-[#0b101d] border border-white/[0.06] flex items-center gap-1.5 font-mono-num text-xs font-extrabold ${
+          canAfford ? 'text-[#63e6be]' : 'text-[#f5b041]'
+        } shadow-inner shrink-0">
+          <span class="w-3 h-3 rounded-full bg-[#f5b041] shrink-0 inline-block"></span>
+          <span>${cost}</span>
         </div>
       `;
 
@@ -256,10 +346,18 @@ export class UIController {
         if (storage.buyUpgrade(u.key)) {
           sfx.playGateCharge();
           this.game.player.count = 5 + (storage.getSave().upgrades.startSquad - 1) * 2;
-          this.game.initLevel(this.game.currentLevel);
+          this.game.initLevel(this.game.currentLevel, this.game.isEndless);
           this.renderUpgradeButtons();
           this.updatePowerReadiness();
-          this.updateHUD(this.game.currentLevel, this.game.enemiesLeft, this.game.totalEnemiesInLevel, storage.getSave().coins);
+          this.updateHUD(
+            this.game.currentLevel,
+            this.game.enemiesLeft,
+            this.game.totalEnemiesInLevel,
+            storage.getSave().coins,
+            this.game.isEndless,
+            this.game.endlessTimeSurvived,
+            this.game.endlessThreatLevel
+          );
         } else {
           sfx.playLose();
         }
@@ -348,13 +446,18 @@ export class UIController {
   private updateAccountHUD(profile: UserAccountProfile | null): void {
     const iconEl = document.getElementById('headerAccountIcon');
     const labelEl = document.getElementById('headerAccountLabel');
+    const userSvg = `
+      <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+        <path fill-rule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clip-rule="evenodd" />
+      </svg>
+    `;
     if (!profile) {
-      if (iconEl) iconEl.textContent = '👤';
+      if (iconEl) iconEl.innerHTML = userSvg;
       if (labelEl) labelEl.textContent = 'Sign In';
       return;
     }
     const isAdmin = isCurrentAdmin();
-    if (iconEl) iconEl.textContent = isAdmin ? '👑' : '🎖️';
+    if (iconEl) iconEl.innerHTML = userSvg;
     if (labelEl) labelEl.textContent = isAdmin ? 'Admin' : (profile.displayName ? profile.displayName.split(' ')[0] : 'Profile');
   }
 
@@ -365,45 +468,64 @@ export class UIController {
     const email = document.getElementById('briefingCommanderEmail');
     const btnContainer = document.getElementById('briefingBtnContainer');
 
+    const defaultAvatarSvg = `
+      <svg class="w-5 h-5 text-slate-300" fill="currentColor" viewBox="0 0 20 20">
+        <path fill-rule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clip-rule="evenodd" />
+      </svg>
+    `;
+
     if (!profile) {
-      if (avatar) avatar.textContent = '👤';
+      if (avatar) avatar.innerHTML = defaultAvatarSvg;
       if (name) name.textContent = 'Guest Commander';
       if (pill) {
-        pill.textContent = 'Offline';
-        pill.className = 'px-1.5 py-0.5 rounded-full text-[9px] font-extrabold uppercase tracking-wide bg-slate-800 text-slate-400 border border-slate-700';
+        pill.textContent = 'GUEST MODE';
+        pill.className = 'px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-[#1e293b] text-slate-300 border border-slate-700';
       }
       if (email) email.textContent = '⚠️ Progress saved locally only';
       if (btnContainer) {
         btnContainer.innerHTML = `
-          <button id="btnBriefingAction" class="btn-tap px-3 py-1.5 rounded-xl bg-gradient-to-r from-sky-400 to-sky-500 text-slate-950 font-black text-[11px] uppercase shadow-sm">
-            Sign In
+          <button id="btnBriefingAction" class="btn-tap px-3.5 py-1.5 rounded-full bg-[#d0bfff] text-[#1a112e] font-extrabold text-[10px] uppercase tracking-wider shadow-sm">
+            SIGN IN
+          </button>
+          <button id="btnBriefingProfile" class="btn-tap text-xs font-medium text-slate-300 underline underline-offset-2 hover:text-white px-1.5">
+            Profile
           </button>
         `;
         document.getElementById('btnBriefingAction')?.addEventListener('click', () => {
           this.authModal.classList.remove('hidden');
+        });
+        document.getElementById('btnBriefingProfile')?.addEventListener('click', () => {
+          this.renderProfile();
+          this.profileModal.classList.remove('hidden');
         });
       }
       return;
     }
 
     const isAdmin = isCurrentAdmin();
-    if (avatar) avatar.textContent = isAdmin ? '👑' : '🎖️';
+    if (avatar) {
+      if (profile.photoURL) {
+        avatar.innerHTML = `<img src="${profile.photoURL}" alt="Commander" class="w-full h-full object-cover rounded-full" />`;
+      } else {
+        avatar.innerHTML = defaultAvatarSvg;
+      }
+    }
     if (name) name.textContent = profile.displayName || (isAdmin ? 'Chief Commander Hayes' : 'Commander');
     if (pill) {
-      pill.textContent = isAdmin ? '👑 Chief Admin' : profile.status === 'APPROVED' ? '✓ Approved' : '⏳ Pending';
+      pill.textContent = isAdmin ? 'CHIEF ADMIN' : profile.status === 'APPROVED' ? 'COMMANDER' : 'PENDING';
       pill.className = isAdmin || profile.status === 'APPROVED'
-        ? 'px-1.5 py-0.5 rounded-full text-[9px] font-extrabold uppercase tracking-wide bg-emerald-500/20 text-emerald-300 border border-emerald-400/30'
-        : 'px-1.5 py-0.5 rounded-full text-[9px] font-extrabold uppercase tracking-wide bg-amber-500/20 text-amber-300 border border-amber-400/30';
+        ? 'px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-[#2b3c35] text-[#a3e6b7] border border-[#456355]/50'
+        : 'px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-amber-500/20 text-amber-300 border border-amber-400/30';
     }
     if (email) email.textContent = `${profile.email} • Cloud Active`;
 
     if (btnContainer) {
       if (isAdmin) {
         btnContainer.innerHTML = `
-          <button id="btnBriefingAdmin" class="btn-tap px-2.5 py-1.5 rounded-xl bg-amber-500 text-slate-950 font-black text-[10px] uppercase shadow-sm">
-            👑 Approvals
+          <button id="btnBriefingAdmin" class="btn-tap px-3.5 py-1.5 rounded-full bg-[#d0bfff] text-[#1a112e] font-extrabold text-[10px] uppercase tracking-wider shadow-sm">
+            APPROVALS
           </button>
-          <button id="btnBriefingProfile" class="btn-tap px-2.5 py-1.5 rounded-xl bg-slate-800 border border-slate-700 text-slate-200 font-bold text-[10px]">
+          <button id="btnBriefingProfile" class="btn-tap text-xs font-medium text-slate-300 underline underline-offset-2 hover:text-white px-1.5">
             Profile
           </button>
         `;
@@ -413,16 +535,26 @@ export class UIController {
         document.getElementById('btnBriefingProfile')?.addEventListener('click', () => {
           this.renderProfile();
           this.profileModal.classList.remove('hidden');
+          storage.syncWithCloud().then(() => {
+            if (!this.profileModal.classList.contains('hidden')) {
+              this.renderProfile();
+            }
+          }).catch(() => {});
         });
       } else {
         btnContainer.innerHTML = `
-          <button id="btnBriefingProfile" class="btn-tap px-3 py-1.5 rounded-xl bg-slate-800 border border-slate-700 text-sky-400 font-bold text-[11px]">
+          <button id="btnBriefingProfile" class="btn-tap text-xs font-medium text-slate-300 underline underline-offset-2 hover:text-white px-2">
             Profile
           </button>
         `;
         document.getElementById('btnBriefingProfile')?.addEventListener('click', () => {
           this.renderProfile();
           this.profileModal.classList.remove('hidden');
+          storage.syncWithCloud().then(() => {
+            if (!this.profileModal.classList.contains('hidden')) {
+              this.renderProfile();
+            }
+          }).catch(() => {});
         });
       }
     }
@@ -523,6 +655,7 @@ export class UIController {
         return;
       }
       this.startOverlay.classList.add('hidden');
+      document.getElementById('hudCombatProgress')?.classList.remove('hidden');
       this.btnPause?.classList.remove('hidden');
       this.game.startCombat();
     });
