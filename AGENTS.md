@@ -33,12 +33,17 @@ Welcome to **Squad Surge: 100-Level Tactical Highway**, an official development 
 - `npm test`: Runs automated simulation test suite (`node tests/verify-game.cjs`).
 - `npm run dev`: Boots local Vite development server on port 5173.
 - `npm run build`: Compiles production PWA bundle (`tsc && vite build`).
-- `npm run deploy`: Deploys to Google Cloud Firebase Hosting (`https://squad-surge-game.web.app`).
+- `npm run deploy`: Deploys to Google Cloud Firebase Hosting (`https://squad-surge-game.web.app`) and Firestore rules.
 
 ---
 
-## ☁️ Cloud & Mobile Integration
+## ☁️ Cloud, Security & Player Account Approval System
 
 - **Firebase Hosting Site:** `squad-surge-game.web.app` (GCP Project: `shipyard-cat-game`).
-- **Auth & Cloud Saves:** Anonymous one-tap onboarding or Google Sign-In with real-time Cloud Firestore synchronization to `squad_surge_players/{uid}`.
+- **Secure Credentials:** All Firebase configurations are loaded via Vite environment variables (`.env` with `VITE_FIREBASE_*`). Git repository is sanitized with zero hardcoded API keys.
+- **Role-Based Access Control (RBAC):**
+  - **Admin Email:** `hayesorhaze@gmail.com` (assigned `ADMIN` role with auto-approval).
+  - **Player Accounts:** Players authenticate via Google Sign-In or Email/Password, defaulting to `status: 'PENDING'`.
+  - **Admin Approval Queue:** In-game admin modal (`#adminModal`) permits `hayesorhaze@gmail.com` to review and approve/reject pending players.
+  - **Firestore Security Rules:** Managed via [`firestore.rules`](./firestore.rules), enforcing strict privilege boundaries so only approved users can persist progress, while only the admin can modify user account statuses.
 - **Offline PWA:** Caches assets via `public/sw.js` and installs full-screen to mobile home screens.

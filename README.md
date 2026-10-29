@@ -15,8 +15,9 @@
 
 - **Game Engine:** HTML5 2D Canvas with procedural vector rendering at 60 FPS
 - **Framework & Tooling:** TypeScript 5.7, Vite 6, Tailwind CSS 3.4
-- **Audio:** Web Audio API procedural synthesizer (zero audio asset latency)
-- **Backend & Cloud:** Firebase Auth (Anonymous & Google Sign-In) + Cloud Firestore
+- **Audio:** Web Audio API procedural synthesizer + BGM audio player (`Last_Known_Coordinates.mp3`)
+- **Backend & Cloud:** Firebase Auth (Google Sign-In & Email/Password) + Cloud Firestore
+- **Security & RBAC:** Admin-approved whitelist access (`hayesorhaze@gmail.com`), secure `.env` credential management, and declarative Firestore security rules
 - **Hosting:** Google Cloud Platform / Firebase Hosting
 
 ---
