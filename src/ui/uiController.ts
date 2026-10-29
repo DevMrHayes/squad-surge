@@ -42,6 +42,7 @@ export class UIController {
     this.game = game;
     this.setupListeners();
     this.updateHUD(game.currentLevel, 0, 0, storage.getSave().coins);
+    this.handleAuthStateChange(getCurrentProfile());
   }
 
   public updateHUD(level: number, left: number, total: number, coins: number): void {
@@ -70,6 +71,9 @@ export class UIController {
     document.getElementById('startRuleTitle')!.textContent = plan.biome.ruleTitle;
     document.getElementById('startRuleDesc')!.textContent = plan.biome.ruleDesc;
     document.getElementById('startReward')!.textContent = `+${plan.coinReward} 🪙`;
+
+    // Render prominent commander status card
+    this.updateBriefingProfileCard(profile);
 
     // Render pre-level upgrade buttons
     this.renderUpgradeButtons();
@@ -115,7 +119,7 @@ export class UIController {
         e.stopPropagation();
         if (storage.buyUpgrade(u.key)) {
           sfx.playGateCharge();
-          this.game.player.count = 1 + (storage.getSave().upgrades.startSquad - 1) * 2;
+          this.game.player.count = 5 + (storage.getSave().upgrades.startSquad - 1) * 2;
           this.game.initLevel(this.game.currentLevel);
           this.renderUpgradeButtons();
           this.updateHUD(this.game.currentLevel, this.game.enemiesLeft, this.game.totalEnemiesInLevel, storage.getSave().coins);
@@ -133,23 +137,121 @@ export class UIController {
     const resTitle = document.getElementById('resTitle')!;
     const resDesc = document.getElementById('resDesc')!;
     const resCoins = document.getElementById('resCoins')!;
+    const resBaseReward = document.getElementById('resBaseReward');
+    const resSurvivalBonus = document.getElementById('resSurvivalBonus');
     const btnNext = document.getElementById('btnNext')!;
 
     if (won) {
       resIcon.textContent = '🏆';
       resTitle.textContent = 'SECTOR SECURED';
-      resDesc.textContent = `Excellent tactical command! Enemy phalanx neutralised.`;
+      resDesc.textContent = reason || 'Excellent tactical command! Enemy phalanx neutralised.';
+
+      const survivalBonus = Math.max(0, this.game.player.count * 2);
+      const baseReward = Math.max(0, coins - survivalBonus);
+      if (resBaseReward) resBaseReward.textContent = `+${baseReward} 🪙`;
+      if (resSurvivalBonus) resSurvivalBonus.textContent = `+${survivalBonus} 🪙 (+${this.game.player.count} 👥)`;
       resCoins.textContent = `+${coins} 🪙`;
       btnNext.classList.remove('hidden');
     } else {
       resIcon.textContent = '💥';
       resTitle.textContent = 'MISSION FAILED';
-      resDesc.textContent = reason || 'Watch both lanes and prioritize Shield Bearers!';
+      resDesc.textContent = reason || 'Perimeter overrun! Defend the line!';
+      if (resBaseReward) resBaseReward.textContent = `+0 🪙`;
+      if (resSurvivalBonus) resSurvivalBonus.textContent = `+0 🪙 (0 👥)`;
       resCoins.textContent = `+${coins} 🪙`;
       btnNext.classList.add('hidden');
     }
 
     this.resultModal.classList.remove('hidden');
+  }
+
+  private updateAccountHUD(profile: UserAccountProfile | null): void {
+    const iconEl = document.getElementById('headerAccountIcon');
+    const labelEl = document.getElementById('headerAccountLabel');
+    if (!profile) {
+      if (iconEl) iconEl.textContent = '👤';
+      if (labelEl) labelEl.textContent = 'Sign In';
+      return;
+    }
+    const isAdmin = isCurrentAdmin();
+    if (iconEl) iconEl.textContent = isAdmin ? '👑' : '🎖️';
+    if (labelEl) labelEl.textContent = isAdmin ? 'Admin' : (profile.displayName ? profile.displayName.split(' ')[0] : 'Profile');
+  }
+
+  private updateBriefingProfileCard(profile: UserAccountProfile | null): void {
+    const avatar = document.getElementById('briefingAvatar');
+    const name = document.getElementById('briefingCommanderName');
+    const pill = document.getElementById('briefingStatusPill');
+    const email = document.getElementById('briefingCommanderEmail');
+    const btnContainer = document.getElementById('briefingBtnContainer');
+
+    if (!profile) {
+      if (avatar) avatar.textContent = '👤';
+      if (name) name.textContent = 'Guest Commander';
+      if (pill) {
+        pill.textContent = 'Offline';
+        pill.className = 'px-1.5 py-0.5 rounded-full text-[9px] font-extrabold uppercase tracking-wide bg-slate-800 text-slate-400 border border-slate-700';
+      }
+      if (email) email.textContent = '⚠️ Progress saved locally only';
+      if (btnContainer) {
+        btnContainer.innerHTML = `
+          <button id="btnBriefingAction" class="btn-tap px-3 py-1.5 rounded-xl bg-gradient-to-r from-sky-400 to-sky-500 text-slate-950 font-black text-[11px] uppercase shadow-sm">
+            Sign In
+          </button>
+        `;
+        document.getElementById('btnBriefingAction')?.addEventListener('click', () => {
+          this.authModal.classList.remove('hidden');
+        });
+      }
+      return;
+    }
+
+    const isAdmin = isCurrentAdmin();
+    if (avatar) avatar.textContent = isAdmin ? '👑' : '🎖️';
+    if (name) name.textContent = profile.displayName || (isAdmin ? 'Chief Commander Hayes' : 'Commander');
+    if (pill) {
+      pill.textContent = isAdmin ? '👑 Chief Admin' : profile.status === 'APPROVED' ? '✓ Approved' : '⏳ Pending';
+      pill.className = isAdmin || profile.status === 'APPROVED'
+        ? 'px-1.5 py-0.5 rounded-full text-[9px] font-extrabold uppercase tracking-wide bg-emerald-500/20 text-emerald-300 border border-emerald-400/30'
+        : 'px-1.5 py-0.5 rounded-full text-[9px] font-extrabold uppercase tracking-wide bg-amber-500/20 text-amber-300 border border-amber-400/30';
+    }
+    if (email) email.textContent = `${profile.email} • Cloud Active`;
+
+    if (btnContainer) {
+      if (isAdmin) {
+        btnContainer.innerHTML = `
+          <button id="btnBriefingAdmin" class="btn-tap px-2.5 py-1.5 rounded-xl bg-amber-500 text-slate-950 font-black text-[10px] uppercase shadow-sm">
+            👑 Approvals
+          </button>
+          <button id="btnBriefingProfile" class="btn-tap px-2.5 py-1.5 rounded-xl bg-slate-800 border border-slate-700 text-slate-200 font-bold text-[10px]">
+            Profile
+          </button>
+        `;
+        document.getElementById('btnBriefingAdmin')?.addEventListener('click', () => {
+          this.openAdminPanel();
+        });
+        document.getElementById('btnBriefingProfile')?.addEventListener('click', () => {
+          this.renderProfile();
+          this.profileModal.classList.remove('hidden');
+        });
+      } else {
+        btnContainer.innerHTML = `
+          <button id="btnBriefingProfile" class="btn-tap px-3 py-1.5 rounded-xl bg-slate-800 border border-slate-700 text-sky-400 font-bold text-[11px]">
+            Profile
+          </button>
+        `;
+        document.getElementById('btnBriefingProfile')?.addEventListener('click', () => {
+          this.renderProfile();
+          this.profileModal.classList.remove('hidden');
+        });
+      }
+    }
+  }
+
+  private async openAdminPanel(): Promise<void> {
+    this.profileModal.classList.add('hidden');
+    this.adminModal.classList.remove('hidden');
+    await this.loadAdminApprovalQueue();
   }
 
   public handleAuthStateChange(profile: UserAccountProfile | null): void {
@@ -159,6 +261,9 @@ export class UIController {
     const btnOpenAuth = document.getElementById('btnOpenAuth');
     const btnLogout = document.getElementById('btnLogout');
     const btnOpenAdmin = document.getElementById('btnOpenAdmin');
+
+    this.updateAccountHUD(profile);
+    this.updateBriefingProfileCard(profile);
 
     if (!profile) {
       if (accountLabel) accountLabel.textContent = 'Commander (Guest)';
@@ -276,6 +381,17 @@ export class UIController {
       this.mapModal.classList.add('hidden');
       if (this.startOverlay.classList.contains('hidden') && this.game.mode === 'PAUSED') {
         this.game.resume();
+      }
+    });
+
+    // Account Header Button
+    document.getElementById('btnAccountHeader')?.addEventListener('click', () => {
+      const profile = getCurrentProfile();
+      if (!profile) {
+        this.authModal.classList.remove('hidden');
+      } else {
+        this.renderProfile();
+        this.profileModal.classList.remove('hidden');
       }
     });
 
@@ -525,6 +641,8 @@ export class UIController {
       ? '🟡 Pending Admin Whitelist'
       : '⚪ Offline Local Mode';
 
+    const statHighScore = document.getElementById('statHighScore');
+    if (statHighScore) statHighScore.textContent = `${save.stats.highScore || 0}`;
     document.getElementById('statKills')!.textContent = `${save.stats.totalKills}`;
     document.getElementById('statBosses')!.textContent = `${save.stats.bossesDefeated}`;
     document.getElementById('statAltars')!.textContent = `${save.stats.altarsUsed}`;

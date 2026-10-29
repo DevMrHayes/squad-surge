@@ -151,9 +151,17 @@ export function initAuthListener(onProfileLoaded: (profile: UserAccountProfile |
 export async function loginWithGoogle(): Promise<UserAccountProfile | null> {
   if (!auth) return null;
   const provider = new GoogleAuthProvider();
-  const cred = await signInWithPopup(auth, provider);
-  currentUser = cred.user;
-  return await getOrCreateUserProfile(cred.user);
+  provider.setCustomParameters({ prompt: 'select_account' });
+  try {
+    const cred = await signInWithPopup(auth, provider);
+    currentUser = cred.user;
+    return await getOrCreateUserProfile(cred.user);
+  } catch (err: any) {
+    if (err?.code === 'auth/popup-blocked') {
+      throw new Error('Pop-up was blocked by your mobile browser. Please allow popups for this site or use the Email/Password sign-in below.');
+    }
+    throw err;
+  }
 }
 
 export async function loginWithEmail(email: string, pass: string, isSignUp: boolean): Promise<UserAccountProfile | null> {

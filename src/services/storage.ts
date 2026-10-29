@@ -26,6 +26,7 @@ export const DEFAULT_SAVE: SaveData = {
     highestSquad: 5,
     gamesPlayed: 0,
     victories: 0,
+    highScore: 0,
   },
   achievements: {},
 };

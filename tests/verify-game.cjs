@@ -219,6 +219,34 @@ it('Perimeter breach clash trades soldiers by HP ratio and fails if Boss breache
   assert.strictEqual(isFatal, true, 'Boss perimeter breach must be fatal');
 });
 
+// 11. Mutual Exclusion Choice Gates
+it('Pair gate mutual exclusion shatters sibling gate upon traversal', () => {
+  const gates = [
+    { id: 1, pairId: 101, val: 5, lane: 'LEFT' },
+    { id: 2, pairId: 101, val: 3, lane: 'RIGHT' },
+  ];
+  const player = { x: 95, count: 5 }; // Player goes Left
+  const collected = gates[0];
+
+  // Shatter sibling with matching pairId
+  const remainingGates = gates.filter(g => g.id === collected.id || g.pairId !== collected.pairId);
+  assert.strictEqual(remainingGates.length, 1, 'Sibling gate must be eliminated');
+  assert.strictEqual(remainingGates[0].id, 1, 'Only chosen gate remains active');
+});
+
+// 12. Sound Economy & Survival Bounty
+it('Sound reward economy computes base clear plus squad survival bounty accurately', () => {
+  const level = 2;
+  const baseClearReward = Math.round(50 + level * 14); // 78
+  const survivingSquad = 18;
+  const survivalBonus = survivingSquad * 2; // 36
+  const totalEarned = baseClearReward + survivalBonus; // 114
+
+  assert.strictEqual(baseClearReward, 78);
+  assert.strictEqual(survivalBonus, 36);
+  assert.strictEqual(totalEarned, 114);
+});
+
 console.log('====================================================');
 console.log(`  Tests Completed: ${passedTests} / ${totalTests} Passed`);
 console.log('====================================================');

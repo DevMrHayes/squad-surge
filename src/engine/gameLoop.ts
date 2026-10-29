@@ -55,6 +55,8 @@ export class GameLoop {
   private obstacleQueue: ObstacleQueueItem[] = [];
 
   public enemiesKilled: number = 0;
+  public sessionCoinsEarned: number = 0;
+  public sessionScore: number = 0;
   public targetX: number = 190;
   public isDragging: boolean = false;
 
@@ -85,7 +87,7 @@ export class GameLoop {
 
   private createDefaultPlayer(): PlayerState {
     const save = storage.getSave();
-    const startCount = 1 + (save.upgrades.startSquad - 1) * 2;
+    const startCount = 5 + (save.upgrades.startSquad - 1) * 2;
     return {
       x: this.cw / 2,
       y: this.ch * 0.78,
@@ -136,6 +138,8 @@ export class GameLoop {
     this.elapsed = 0;
     this.trauma = 0;
     this.enemiesKilled = 0;
+    this.sessionCoinsEarned = 0;
+    this.sessionScore = 0;
 
     this.player = this.createDefaultPlayer();
     this.targetX = this.cw / 2;
@@ -216,8 +220,11 @@ export class GameLoop {
 
   private spawnGateEntity(gDef: GateQueueItem, overrideY?: number): void {
     const margin = 18;
-    const laneW = (this.cw - margin * 2 - 12) / 2;
-    const x = margin + gDef.lane * (laneW + 12) + laneW / 2;
+    const centerDividerW = 24; // 24px distinct highway median
+    const laneW = (this.cw - margin * 2 - centerDividerW) / 2;
+    const x = gDef.lane === 0 
+      ? margin + laneW / 2 
+      : margin + laneW + centerDividerW + laneW / 2;
 
     this.gates.push({
       id: Math.random(),
@@ -245,6 +252,7 @@ export class GameLoop {
       slideDir: 1,
       flipPolarity: gDef.flipPolarity,
       polarityTimer: 3.0,
+      pairId: gDef.pairId,
     });
   }
 
@@ -285,6 +293,12 @@ export class GameLoop {
   }
 
   public unlockTacticalBoost(boostType: string, x: number, y: number, color: string): void {
+    const save = storage.getSave();
+    save.coins += 10;
+    this.sessionCoinsEarned += 10;
+    this.sessionScore += 250;
+    this.spawnFloatText(x, y - 48, '+10 🪙 CRATE BONUS', '#fbbf24');
+    this.notifyHUD();
     if (boostType === 'AP') {
       this.player.buffs.apTimer = 7.5;
       this.spawnFloatText(x, y - 24, '⚡ AP ROUNDS (2.5x vs 🛡️)!', color);
@@ -465,6 +479,18 @@ export class GameLoop {
 
       // Traversal through gate
       if (Math.abs(g.y - squadY) <= 22 && Math.abs(g.x - this.player.x) <= g.w / 2 + collectHalfW * 0.4) {
+        // MUTUAL EXCLUSION: If gate is paired, shatter the sibling gate in this dilemma row
+        if (g.pairId) {
+          for (let s = this.gates.length - 1; s >= 0; s--) {
+            const sib = this.gates[s];
+            if (sib.id !== g.id && sib.pairId === g.pairId) {
+              CombatEngine.createExplosionParticles(sib.x, sib.y, '#94a3b8', this.particles, 10, true);
+              this.spawnFloatText(sib.x, squadY - 24, '🚫 LOCKED OUT', '#94a3b8');
+              this.gates.splice(s, 1);
+              if (s < i) i--;
+            }
+          }
+        }
         if ((g.kind === 'LOCKED_MULT' || g.kind === 'BUFF_GATE') && !g.unlocked) {
           this.spawnFloatText(this.player.x, squadY - 28, '🔒 LOCKED GATE (NO EFFECT)', '#94a3b8');
         } else if (g.kind === 'LOCKED_MULT') {
@@ -536,6 +562,25 @@ export class GameLoop {
       if (!e.active) {
         this.enemies.splice(i, 1);
         this.enemiesKilled++;
+
+        let bounty = 1;
+        if (e.isBoss) bounty = 25;
+        else if (e.type === 'BRUTE') bounty = 5;
+        else if (e.type === 'SHIELD_BEARER' || e.type === 'HEALER_DRONE') bounty = 6;
+        else if (e.type === 'SHOOTER') bounty = 4;
+        else if (e.type === 'SPRINTER') bounty = 2;
+        else if (e.type === 'MINE') bounty = 1;
+
+        this.sessionCoinsEarned += bounty;
+        this.sessionScore += (bounty * 10) + (e.isBoss ? 1500 : 100);
+
+        save.coins += bounty;
+        save.stats.totalKills += 1;
+        if (e.isBoss) save.stats.bossesDefeated += 1;
+        save.stats.highScore = Math.max(save.stats.highScore || 0, this.sessionScore);
+
+        this.spawnFloatText(e.x, e.y - 10, `+${bounty} 🪙`, '#fbbf24');
+        this.notifyHUD();
         continue;
       }
 
@@ -633,8 +678,20 @@ export class GameLoop {
       this.mode = 'VICTORY';
       sfx.pauseBGM();
       sfx.playWin();
-      storage.recordWin(this.currentLevel, this.plan.coinReward);
-      if (this.onGameOver) this.onGameOver(true, this.plan.coinReward);
+
+      const survivalBonus = Math.max(0, this.player.count * 2);
+      const totalReward = this.plan.coinReward + survivalBonus;
+      this.sessionCoinsEarned += totalReward;
+      this.sessionScore += 2500 + (this.player.count * 25);
+
+      storage.recordWin(this.currentLevel, totalReward);
+      const save = storage.getSave();
+      save.stats.highScore = Math.max(save.stats.highScore || 0, this.sessionScore);
+      storage.saveLocal();
+
+      if (this.onGameOver) {
+        this.onGameOver(true, totalReward, `Sector Secured! Base: +${this.plan.coinReward} 🪙 | Squad Survival (${this.player.count} 👥): +${survivalBonus} 🪙`);
+      }
     }
 
     // 11. Particles, Shockwaves, Enemies HitFlash & Floating Texts

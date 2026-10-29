@@ -1,4 +1,4 @@
-// 100-Level Tactical Wave & Split-Lane Dilemma Generator (Time-Scheduled Queue Architecture)
+// Squad Surge: 100-Level Tactical Wave & Split-Lane Dilemma Generator
 import { 
   LevelPlan, 
   GateQueueItem, 
@@ -18,16 +18,21 @@ export class WaveGenerator {
 
     const isTitan = level % 10 === 0;
     const isWarden = !isTitan && (level % 5 === 0);
+    const isBossLevel = isTitan || isWarden;
     const tier = level >= 70 ? 5 : level >= 45 ? 4 : level >= 25 ? 3 : level >= 10 ? 2 : 1;
 
-    const waveCount = Math.min(7, 4 + Math.floor(level / 20));
-    const hpScale = Math.pow(1.062, level - 1);
-    const baseEnemyHP = Math.round((24 + level * 8) * hpScale);
-    const scrollSpeed = Math.min(74, 46 + level * 0.26);
+    // Smooth wave count progression: L1-2 = 2 waves, L3-8 = 3 waves, scaling to 6 waves max
+    const waveCount = level <= 2 ? 2 : Math.min(6, 2 + Math.floor(level / 8));
+
+    // Smooth enemy HP curve (Eliminates the impossible Level 2 wall)
+    // Level 1 = 16 HP, Level 2 = 18 HP, Level 5 = 25 HP, Level 10 = 42 HP
+    const scaleFactor = 1 + (level - 1) * 0.08 + Math.pow(Math.max(0, level - 1), 1.4) * 0.010;
+    const baseEnemyHP = Math.round(16 * scaleFactor);
+    const scrollSpeed = Math.min(68, 42 + level * 0.22);
 
     // Gate caps & charge requirements
-    const maxAddCap = Math.min(24, 6 + Math.floor(level * 0.3));
-    const hitsPerIncrement = Math.min(18, 8 + Math.floor(level * 0.15));
+    const maxAddCap = Math.min(26, 8 + Math.floor(level * 0.25));
+    const hitsPerIncrement = Math.min(16, 6 + Math.floor(level * 0.12));
 
     const gateQueue: GateQueueItem[] = [];
     const crateQueue: CrateQueueItem[] = [];
@@ -47,15 +52,16 @@ export class WaveGenerator {
     for (let w = 0; w < waveCount; w++) {
       const greedLane = (w + level) % 2; // 0 = Left, 1 = Right
       const threatLane = 1 - greedLane;
+      const pairId = (level * 1000) + (w * 10) + 1; // Mutual exclusion pair identifier
 
-      const isLockedMult = (w === waveCount - 2) && (level >= 2);
-      const isTacticalBuffGate = (w % 2 === 1);
+      const isLockedMult = (w === waveCount - 1) && (level >= 3);
+      const isTacticalBuffGate = (w % 2 === 1) && (level >= 2);
       const isAltarWave = sector >= 4 && w === 1 && level >= 61;
       const isQuantumWave = sector === 5 && w % 2 === 0;
 
-      // 1. GATES
+      // 1. GATES (Guarantee strictly positive rewards in early levels)
       if (isAltarWave) {
-        // Sacrifice / Conversion Altar (Phase 1)
+        // Sacrifice / Conversion Altar (Sector 4+)
         gateQueue.push({
           spawnTime: cursorTime,
           lane: greedLane,
@@ -63,39 +69,42 @@ export class WaveGenerator {
           val: 0,
           maxVal: 0,
           hitsPerStep: 1,
-          altarSacrificeCost: Math.min(25, 10 + Math.floor(level * 0.15)),
+          altarSacrificeCost: Math.min(20, 8 + Math.floor(level * 0.12)),
           altarWeaponReward: (w + level) % 2 === 0 ? 'laserWeapon' : 'homingMissiles',
+          pairId,
         });
-        // Opposite hazard gate
         gateQueue.push({
           spawnTime: cursorTime,
           lane: threatLane,
           kind: 'HAZARD',
-          val: -(3 + Math.floor(level * 0.3)),
+          val: -(2 + Math.floor(level * 0.2)),
           maxVal: 4,
-          hitsPerStep: hitsPerIncrement
+          hitsPerStep: hitsPerIncrement,
+          pairId,
         });
       } else if (isLockedMult) {
-        const lockHits = Math.round(14 + level * 0.5);
+        const lockHits = Math.min(20, Math.round(8 + level * 0.3));
         gateQueue.push({
           spawnTime: cursorTime,
           lane: greedLane,
           kind: 'LOCKED_MULT',
           val: 2,
           lockHitsRemaining: lockHits,
-          lockHitsMax: lockHits
+          lockHitsMax: lockHits,
+          pairId,
         });
         gateQueue.push({
           spawnTime: cursorTime,
           lane: threatLane,
-          kind: 'HAZARD',
-          val: -(4 + Math.floor(level * 0.4)),
-          maxVal: 4,
-          hitsPerStep: hitsPerIncrement
+          kind: level <= 3 ? 'CHARGE_ADD' : 'HAZARD',
+          val: level <= 3 ? 3 : -(2 + Math.floor(level * 0.25)),
+          maxVal: maxAddCap,
+          hitsPerStep: hitsPerIncrement,
+          pairId,
         });
       } else if (isTacticalBuffGate) {
         const buff = tacticalBoostPool[(level + w) % tacticalBoostPool.length];
-        const lockHits = Math.round(11 + level * 0.35);
+        const lockHits = Math.min(16, Math.round(6 + level * 0.25));
         gateQueue.push({
           spawnTime: cursorTime,
           lane: greedLane,
@@ -104,32 +113,45 @@ export class WaveGenerator {
           label: buff.label,
           color: buff.color,
           lockHitsRemaining: lockHits,
-          lockHitsMax: lockHits
+          lockHitsMax: lockHits,
+          pairId,
         });
         gateQueue.push({
           spawnTime: cursorTime,
           lane: threatLane,
           kind: 'CHARGE_ADD',
-          val: -(2 + Math.floor(level * 0.25) + w),
-          maxVal: Math.max(4, Math.floor(maxAddCap * 0.75)),
-          hitsPerStep: hitsPerIncrement
+          val: level <= 2 ? 3 : -(1 + Math.floor(level * 0.15)),
+          maxVal: Math.max(6, Math.floor(maxAddCap * 0.8)),
+          hitsPerStep: hitsPerIncrement,
+          pairId,
         });
       } else {
-        // Chargeable Gate that starts slightly negative or zero
+        // Chargeable Gate
+        const startVal = level <= 2 ? (w === 0 ? 4 : 3) : Math.max(-3, 2 - Math.floor(level * 0.15) - w);
         gateQueue.push({
           spawnTime: cursorTime,
           lane: greedLane,
           kind: isQuantumWave ? 'QUANTUM' : 'CHARGE_ADD',
-          val: -(1 + Math.floor(level * 0.2) + w),
+          val: startVal,
           maxVal: maxAddCap,
           hitsPerStep: hitsPerIncrement,
-          sliding: sector >= 2 && Math.random() < 0.6,
+          sliding: sector >= 2 && Math.random() < 0.5,
           flipPolarity: isQuantumWave,
+          pairId,
+        });
+        gateQueue.push({
+          spawnTime: cursorTime,
+          lane: threatLane,
+          kind: 'CHARGE_ADD',
+          val: level <= 2 ? 2 : Math.max(-4, 1 - Math.floor(level * 0.2)),
+          maxVal: Math.max(4, maxAddCap - 2),
+          hitsPerStep: hitsPerIncrement,
+          pairId,
         });
       }
 
-      // 2. FIELD OBSTACLES (Phase 1)
-      if (sector === 3 || (sector > 3 && Math.random() < 0.5)) {
+      // 2. FIELD OBSTACLES (Introduced in Sector 3+)
+      if (sector === 3 || (sector > 3 && Math.random() < 0.45)) {
         obstacleQueue.push({
           spawnTime: cursorTime + 0.6,
           type: 'PRISM_MIRROR',
@@ -138,7 +160,7 @@ export class WaveGenerator {
         });
       }
 
-      if (Math.random() < 0.45 && w > 0) {
+      if (sector >= 2 && Math.random() < 0.4 && w > 0) {
         obstacleQueue.push({
           spawnTime: cursorTime + 1.2,
           type: Math.random() < 0.6 ? 'SPEED_STRIP' : 'HAZARD_STRIP',
@@ -149,28 +171,29 @@ export class WaveGenerator {
         });
       }
 
-      // 3. FAST SPRINTERS in Threat Lane
-      const sprinterCount = 2 + Math.floor(w / 2);
-      for (let s = 0; s < sprinterCount; s++) {
-        const laneCenter = threatLane === 0 ? 0.23 : 0.77;
-        const jitter = (s % 2 === 0 ? -0.07 : 0.07);
-        const sHp = Math.round(baseEnemyHP * 0.65);
-        enemySchedule.push({
-          spawnTime: cursorTime + 0.3 + s * 0.6,
-          xNorm: Math.max(0.12, Math.min(0.88, laneCenter + jitter)),
-          kind: 'SPRINTER',
-          hp: sHp,
-          maxHp: sHp,
-          speedMult: 2.15
-        });
+      // 3. SPRINTERS (Zero sprinters on Level 1; gentle 1 sprinter on Level 2)
+      if (level >= 2) {
+        const sprinterCount = level <= 3 ? (w === 0 ? 0 : 1) : Math.min(3, 1 + Math.floor(w / 2));
+        for (let s = 0; s < sprinterCount; s++) {
+          const laneCenter = threatLane === 0 ? 0.25 : 0.75;
+          const sHp = Math.round(baseEnemyHP * 0.65);
+          enemySchedule.push({
+            spawnTime: cursorTime + 0.6 + s * 0.8,
+            xNorm: laneCenter,
+            kind: 'SPRINTER',
+            hp: sHp,
+            maxHp: sHp,
+            speedMult: level <= 3 ? 1.55 : 1.95
+          });
+        }
       }
 
-      cursorTime += 3.0;
+      cursorTime += 2.8;
 
-      // 4. ARMORY CRATE + MINE / ARTILLERY DILEMMA
-      if (w % 2 === 0 || w === waveCount - 1) {
-        const cDef = tacticalBoostPool[(level + w + 2) % tacticalBoostPool.length];
-        const crateHP = Math.round(baseEnemyHP * (1.75 + w * 0.32));
+      // 4. ARMORY CRATE (Introduced in Level 2+ as a helpful reward)
+      if (level >= 2 && (w % 2 === 0 || w === waveCount - 1)) {
+        const cDef = tacticalBoostPool[(level + w + 1) % tacticalBoostPool.length];
+        const crateHP = Math.round(baseEnemyHP * (1.3 + w * 0.2));
         const crateLane3 = (level + w) % 3;
         crateQueue.push({
           spawnTime: cursorTime,
@@ -180,62 +203,62 @@ export class WaveGenerator {
           ...cDef
         });
 
-        const mineLane = (crateLane3 + 1) % 3;
-        const mHp = Math.round(baseEnemyHP * 0.85);
-        enemySchedule.push({
-          spawnTime: cursorTime + 0.2,
-          xNorm: (mineLane + 0.5) / 3,
-          kind: 'MINE',
-          hp: mHp,
-          maxHp: mHp,
-          speedMult: 1.08
-        });
-
-        if (level >= 1) {
-          const shooterLane = (crateLane3 + 2) % 3;
-          const shHp = Math.round(baseEnemyHP * 1.4);
+        // Mines appear only starting Level 3+
+        if (level >= 3) {
+          const mineLane = (crateLane3 + 1) % 3;
+          const mHp = Math.round(baseEnemyHP * 0.75);
           enemySchedule.push({
-            spawnTime: cursorTime + 0.35,
+            spawnTime: cursorTime + 0.2,
+            xNorm: (mineLane + 0.5) / 3,
+            kind: 'MINE',
+            hp: mHp,
+            maxHp: mHp,
+            speedMult: 1.05
+          });
+        }
+
+        // Shooters appear only starting Level 4+
+        if (level >= 4) {
+          const shooterLane = (crateLane3 + 2) % 3;
+          const shHp = Math.round(baseEnemyHP * 1.25);
+          enemySchedule.push({
+            spawnTime: cursorTime + 0.4,
             xNorm: (shooterLane + 0.5) / 3,
             kind: 'SHOOTER',
             hp: shHp,
             maxHp: shHp,
-            speedMult: 0.82
+            speedMult: 0.80
           });
         }
 
-        cursorTime += 2.7;
+        cursorTime += 2.4;
       }
 
-      // 5. MAIN COMBAT WAVE (Swarmers + Armored Brutes + Support Units)
-      const rowsInWave = 2 + Math.floor(w / 2);
+      // 5. MAIN COMBAT WAVE
+      // Level 1: 1 row of 3 runners. Level 2: 1 row of 4 runners. Level 3+: 2 rows.
+      const rowsInWave = level <= 2 ? 1 : Math.min(3, 1 + Math.floor(w / 2));
       for (let r = 0; r < rowsInWave; r++) {
-        const countInRow = 4 + (r % 2);
+        const countInRow = level === 1 ? 3 : level === 2 ? 4 : 4 + (r % 2);
         for (let c = 0; c < countInRow; c++) {
           const xNorm = (c + 0.5) / countInRow;
           let kind: EnemyType = 'RUNNER';
-          let hpMult = 0.95 + w * 0.2;
+          let hpMult = 0.9 + w * 0.15;
           let spdMult = 1.0;
 
-          if (r === 0 && (c === 1 || c === countInRow - 2)) {
+          // Brutes only appear starting Level 4+
+          if (level >= 4 && r === 0 && (c === 1 || c === countInRow - 2)) {
             kind = (sector >= 4 && c === 1) ? 'SHIELD_BEARER' : 'BRUTE';
-            hpMult *= 2.5;
+            hpMult *= 2.0;
             spdMult = 0.78;
-          } else if (r === rowsInWave - 1 && c === Math.floor(countInRow / 2)) {
-            if (level >= 15 && Math.random() < 0.4) {
-              kind = 'HEALER_DRONE';
-              hpMult *= 1.1;
-              spdMult = 0.72;
-            } else {
-              kind = (w + r) % 2 === 0 ? 'SHOOTER' : 'SPRINTER';
-              hpMult *= kind === 'SHOOTER' ? 1.45 : 0.72;
-              spdMult = kind === 'SPRINTER' ? 2.1 : 0.85;
-            }
+          } else if (level >= 15 && r === rowsInWave - 1 && c === Math.floor(countInRow / 2) && Math.random() < 0.35) {
+            kind = 'HEALER_DRONE';
+            hpMult *= 1.1;
+            spdMult = 0.72;
           }
 
           const hp = Math.round(baseEnemyHP * hpMult);
           enemySchedule.push({
-            spawnTime: cursorTime + r * 1.3 + (c % 2) * 0.15,
+            spawnTime: cursorTime + r * 1.2 + (c % 2) * 0.12,
             xNorm,
             kind,
             hp,
@@ -245,64 +268,70 @@ export class WaveGenerator {
         }
       }
 
-      cursorTime += rowsInWave * 1.4 + 3.0;
+      cursorTime += rowsInWave * 1.3 + 2.5;
     }
 
-    // 6. FINAL BOSS WAVE
-    gateQueue.push({
-      spawnTime: cursorTime - 1.0,
-      lane: 0,
-      kind: 'CHARGE_ADD',
-      val: 1,
-      maxVal: maxAddCap,
-      hitsPerStep: hitsPerIncrement
-    });
-    gateQueue.push({
-      spawnTime: cursorTime - 1.0,
-      lane: 1,
-      kind: 'BUFF_GATE',
-      boostType: 'AP',
-      label: '⚡ BOSS BREAKER (AP)',
-      color: '#fde047',
-      lockHitsRemaining: 12,
-      lockHitsMax: 12
-    });
+    // 6. BOSS WAVE (Only for levels % 5 === 0 or % 10 === 0)
+    if (isBossLevel) {
+      const bossPairId = (level * 1000) + 99;
+      gateQueue.push({
+        spawnTime: cursorTime - 1.0,
+        lane: 0,
+        kind: 'CHARGE_ADD',
+        val: 3,
+        maxVal: maxAddCap,
+        hitsPerStep: hitsPerIncrement,
+        pairId: bossPairId,
+      });
+      gateQueue.push({
+        spawnTime: cursorTime - 1.0,
+        lane: 1,
+        kind: 'BUFF_GATE',
+        boostType: 'AP',
+        label: '⚡ BOSS BREAKER (AP)',
+        color: '#fde047',
+        lockHitsRemaining: Math.min(14, 8 + Math.floor(level * 0.2)),
+        lockHitsMax: Math.min(14, 8 + Math.floor(level * 0.2)),
+        pairId: bossPairId,
+      });
 
-    cursorTime += 2.2;
+      cursorTime += 1.8;
 
-    for (let i = 0; i < 4; i++) {
-      const isBrute = i === 1 || i === 2;
-      const eHp = Math.round(baseEnemyHP * (isBrute ? 2.3 : 1.25));
+      // Boss escort
+      for (let i = 0; i < (isTitan ? 4 : 2); i++) {
+        const isBrute = i % 2 === 0;
+        const eHp = Math.round(baseEnemyHP * (isBrute ? 1.8 : 1.1));
+        enemySchedule.push({
+          spawnTime: cursorTime,
+          xNorm: (i + 0.5) / (isTitan ? 4 : 2),
+          kind: isBrute ? 'BRUTE' : 'SHOOTER',
+          hp: eHp,
+          maxHp: eHp,
+          speedMult: 0.80
+        });
+      }
+
+      const bossMult = isTitan ? 14 : 8.5;
+      const bossHP = Math.round(baseEnemyHP * bossMult);
+      const bossKind: EnemyType = isTitan ? 'TITAN' : 'WARDEN';
+
       enemySchedule.push({
-        spawnTime: cursorTime,
-        xNorm: (i + 0.5) / 4,
-        kind: isBrute ? 'BRUTE' : 'SHOOTER',
-        hp: eHp,
-        maxHp: eHp,
-        speedMult: 0.82
+        spawnTime: cursorTime + 1.2,
+        xNorm: 0.5,
+        kind: bossKind,
+        name: isTitan ? `TITAN MK-${Math.max(1, Math.floor(level / 10))}` : `WARDEN LV.${level}`,
+        hp: bossHP,
+        maxHp: bossHP,
+        speedMult: 0.50
       });
     }
-
-    const bossMult = isTitan ? 17 : isWarden ? 11.5 : 7.2;
-    const bossHP = Math.round(baseEnemyHP * bossMult);
-    const bossKind: EnemyType = isTitan ? 'TITAN' : isWarden ? 'WARDEN' : 'CAPTAIN';
-
-    enemySchedule.push({
-      spawnTime: cursorTime + 1.4,
-      xNorm: 0.5,
-      kind: bossKind,
-      name: isTitan ? `TITAN MK-${Math.max(1, Math.floor(level / 10))}` : isWarden ? `WARDEN LV.${level}` : `COMMANDER #${level}`,
-      hp: bossHP,
-      maxHp: bossHP,
-      speedMult: 0.52
-    });
 
     return {
       level,
       sector,
       biome,
       tier,
-      isBossLevel: isTitan || isWarden,
+      isBossLevel,
       isTitanLevel: isTitan,
       scrollSpeed,
       totalEnemies: enemySchedule.length,
@@ -310,7 +339,7 @@ export class WaveGenerator {
       crateQueue,
       enemySchedule,
       obstacleQueue,
-      coinReward: Math.round(55 + level * 22 + (isTitan ? 110 : isWarden ? 55 : 0))
+      coinReward: Math.round(50 + level * 14 + (isTitan ? 100 : isWarden ? 50 : 0))
     };
   }
 
@@ -376,7 +405,7 @@ export class WaveGenerator {
       isBoss,
       name: eDef.name,
       slowTimer: 0,
-      shootCooldown: 1.4 + Math.random() * 1.1,
+      shootCooldown: 1.5 + Math.random() * 1.0,
       hitFlash: 0,
       bossPhase: Math.random() * Math.PI * 2,
       healTimer: eDef.kind === 'HEALER_DRONE' ? 1.8 : undefined,

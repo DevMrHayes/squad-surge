@@ -92,6 +92,8 @@ export interface Gate {
   slideDir?: number;
   flipPolarity?: boolean;
   polarityTimer?: number;
+  pairId?: number;
+  shattered?: boolean;
 }
 
 export interface Crate {
@@ -267,6 +269,7 @@ export interface GateQueueItem {
   altarWeaponReward?: 'laserWeapon' | 'homingMissiles';
   sliding?: boolean;
   flipPolarity?: boolean;
+  pairId?: number;
 }
 
 export interface CrateQueueItem {
@@ -336,6 +339,7 @@ export interface SaveData {
     highestSquad: number;
     gamesPlayed: number;
     victories: number;
+    highScore?: number;
   };
   achievements: Record<string, boolean>;
   userId?: string;
