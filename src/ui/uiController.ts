@@ -86,6 +86,9 @@ export class UIController {
     // Render pre-level upgrade buttons
     this.renderUpgradeButtons();
 
+    // Ensure pause button is hidden during briefing (strictly zero active combat clutter)
+    this.btnPause?.classList.add('hidden');
+
     this.startOverlay.classList.remove('hidden');
   }
 
@@ -170,6 +173,7 @@ export class UIController {
       btnNext.classList.add('hidden');
     }
 
+    this.btnPause?.classList.add('hidden');
     this.resultModal.classList.remove('hidden');
   }
 
@@ -337,6 +341,7 @@ export class UIController {
         return;
       }
       this.startOverlay.classList.add('hidden');
+      this.btnPause?.classList.remove('hidden');
       this.game.startCombat();
     });
 
@@ -344,12 +349,14 @@ export class UIController {
     this.btnPause?.addEventListener('click', () => {
       if (this.game.mode === 'PLAYING') {
         this.game.pause();
+        this.btnPause?.classList.add('hidden');
         this.pauseModal.classList.remove('hidden');
       }
     });
 
     document.getElementById('btnResume')?.addEventListener('click', () => {
       this.pauseModal.classList.add('hidden');
+      this.btnPause?.classList.remove('hidden');
       this.game.resume();
     });
 
@@ -437,6 +444,11 @@ export class UIController {
 
     document.getElementById('btnCloseAuth')?.addEventListener('click', () => {
       this.authModal.classList.add('hidden');
+    });
+
+    document.getElementById('btnPlayAsGuest')?.addEventListener('click', () => {
+      this.authModal.classList.add('hidden');
+      this.showStartBriefing();
     });
 
     // Toggle Sign In vs Register

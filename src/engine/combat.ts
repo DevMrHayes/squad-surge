@@ -141,7 +141,7 @@ export class CombatEngine {
 
       // Evolved Homing Micro-Missiles
       if (player.buffs.homingMissiles && enemies.length > 0) {
-        const target = enemies.find(e => e.active && e.y < player.y - 40);
+        const target = enemies.find(e => e.active && e.y >= 25 && e.y < player.y - 40);
         if (target) {
           bullets.push({
             id: Math.random(),
@@ -213,7 +213,7 @@ export class CombatEngine {
     // Yellow EMP Mortar (Arcs over gates directly onto backline drones/artillery)
     if (player.specialists.mortar > 0 && player.mortarTimer <= 0) {
       player.mortarTimer = 2.4;
-      const target = enemies.find(e => e.active && (e.type === 'HEALER_DRONE' || e.type === 'SHOOTER' || e.isBoss));
+      const target = enemies.find(e => e.active && e.y >= 25 && (e.type === 'HEALER_DRONE' || e.type === 'SHOOTER' || e.isBoss));
       const targetX = target ? target.x : player.x + (Math.random() - 0.5) * 140;
       const targetY = target ? target.y : player.y - 280;
 
@@ -303,7 +303,8 @@ export class CombatEngine {
       b.x += b.vx * dt;
       b.y += b.vy * dt;
 
-      if (b.y < -50 || b.y > 900 || b.x < -20 || b.x > 450) {
+      // Bullets deactivate upon reaching visible highway border (no off-screen travel)
+      if (b.y < 20 || b.y > 900 || b.x < -20 || b.x > 450) {
         b.active = false;
       }
     }
@@ -438,15 +439,14 @@ export class CombatEngine {
             }
           }
 
-          // Anti-Shielding Punch-Through: Bullets charge gate and punch through with 50% damage
-          // so enemies walking behind the gate take kinetic damage!
-          b.damage = Math.max(1.5, b.damage * 0.50);
-          b.y = g.y - g.h / 2 - 8;
+          // Barrier Rule: Bullets are absorbed by charging gates until the gate reaches its cap
+          // or is unlocked, allowing enemies to tactically take cover behind barriers.
+          b.active = false;
           return;
         }
       }
 
-      // 2. Check Armory Crate Hits (Anti-Shielding Punch-Through)
+      // 2. Check Armory Crate Hits (Barriers absorb bullets until destroyed)
       for (let j = crates.length - 1; j >= 0; j--) {
         const c = crates[j];
         if (
@@ -463,13 +463,9 @@ export class CombatEngine {
             sfx.playExplosion(false);
             if (shockwaves) this.createShockwave(c.x, c.y, c.color, shockwaves, 54);
             crates.splice(j, 1);
-            // Bullet punches through destroyed crate with 100% damage intact
-          } else {
-            // Bullet damages crate AND punches through beyond it with 65% damage
-            // ensuring shielded enemies behind crates are actively hit!
-            b.damage = Math.max(1.5, b.damage * 0.65);
-            b.y = c.y - c.h / 2 - 8;
           }
+          // Bullets are absorbed by the crate until it is shattered
+          b.active = false;
           return;
         }
       }
@@ -520,7 +516,8 @@ export class CombatEngine {
 
       for (let j = enemies.length - 1; j >= 0; j--) {
         const e = enemies[j];
-        if (!e.active) continue;
+        // Enforce visible highway bounds: Enemies off-screen (y < 25) cannot be damaged or targeted
+        if (!e.active || e.y < 25) continue;
 
         // Check Boss Armor Plates first
         if (e.isBoss && e.armorPlates) {

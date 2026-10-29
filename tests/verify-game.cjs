@@ -247,38 +247,63 @@ it('Sound reward economy computes base clear plus squad survival bounty accurate
   assert.strictEqual(totalEarned, 114);
 });
 
-// 13. Anti-Shielding & Bullet Punch-Through
-it('Armory Crate allows bullet punch-through with residual damage to hit trailing enemies', () => {
-  const crate = { x: 190, y: 300, w: 90, h: 44, hp: 10 };
+// 13. Strict Barrier Rules & Off-Screen Protection
+it('Armory Crate absorbs bullets until shattered, shielding trailing enemies', () => {
+  const crate = { x: 190, y: 300, w: 90, h: 44, hp: 20 };
   const bullet = { x: 190, y: 310, vy: -550, damage: 10, active: true };
   const enemyBehind = { x: 190, y: 260, hp: 20 };
 
   // Bullet hits crate
   crate.hp -= bullet.damage;
-  bullet.y = crate.y - crate.h / 2 - 8; // punched through forward
-  bullet.damage = Math.max(1.5, bullet.damage * 0.65); // 6.5 residual damage
+  bullet.active = false; // Bullet absorbed by crate!
 
-  assert.strictEqual(bullet.active, true, 'Bullet must NOT be destroyed by crate');
-  assert.strictEqual(crate.hp, 0, 'Crate took initial hit');
-  assert.strictEqual(bullet.damage, 6.5, 'Bullet retains 65% punch-through damage');
-  assert.ok(bullet.y < crate.y, 'Bullet position advanced past crate towards enemy');
+  assert.strictEqual(bullet.active, false, 'Bullet must be absorbed by crate while crate has HP');
+  assert.strictEqual(crate.hp, 10, 'Crate took initial damage');
+  assert.strictEqual(enemyBehind.hp, 20, 'Enemy safely took cover behind crate');
 
-  // Bullet proceeds to hit advancing enemy
-  enemyBehind.hp -= bullet.damage;
-  bullet.active = false;
-  assert.strictEqual(enemyBehind.hp, 13.5, 'Enemy trailing behind crate was damaged by punch-through bullet');
+  // Second bullet shatters crate
+  const bullet2 = { x: 190, y: 310, vy: -550, damage: 10, active: true };
+  crate.hp -= bullet2.damage;
+  bullet2.active = false;
+  assert.strictEqual(crate.hp, 0, 'Crate shattered and destroyed');
+
+  // Third bullet now passes cleanly through the opened lane to hit enemy
+  const bullet3 = { x: 190, y: 310, vy: -550, damage: 10, active: true };
+  enemyBehind.hp -= bullet3.damage;
+  bullet3.active = false;
+  assert.strictEqual(enemyBehind.hp, 10, 'Enemy took damage now that barrier was eliminated');
 });
 
-it('Maxed gate allows 100% free bullet pass-through with zero absorption', () => {
-  const maxedGate = { val: 12, maxVal: 12, chargeHits: 0 };
-  const bullet = { x: 100, y: 400, damage: 8, active: true };
+it('Charging gate absorbs bullets, while maxed gate allows 100% free bullet pass-through', () => {
+  // Charging gate
+  const chargingGate = { val: 2, maxVal: 5, chargeHits: 0 };
+  const bullet1 = { x: 100, y: 400, damage: 8, active: true };
+  const isChargingMaxed = chargingGate.val >= chargingGate.maxVal;
+  assert.strictEqual(isChargingMaxed, false);
+  bullet1.active = false; // absorbed to charge gate
+  assert.strictEqual(bullet1.active, false, 'Charging gate must absorb bullet to build charge');
 
-  // Combat collision check on maxed gate
+  // Maxed gate
+  const maxedGate = { val: 5, maxVal: 5, chargeHits: 0 };
+  const bullet2 = { x: 100, y: 400, damage: 8, active: true };
   const isMaxed = maxedGate.val >= maxedGate.maxVal;
   assert.strictEqual(isMaxed, true);
-  // Maxed gate ignores bullet and allows pass-through
-  assert.strictEqual(bullet.active, true, 'Bullet remains active');
-  assert.strictEqual(bullet.damage, 8, 'Bullet retains 100% damage through maxed gate');
+  // Maxed gate bypasses collision and bullet retains 100% damage
+  assert.strictEqual(bullet2.active, true, 'Maxed gate allows bullets to pass freely');
+  assert.strictEqual(bullet2.damage, 8);
+});
+
+it('Enemies off-screen (y < 25) are strictly invulnerable and cannot be targeted', () => {
+  const enemies = [
+    { id: 1, y: -40, hp: 50, active: true },
+    { id: 2, y: 15, hp: 50, active: true },
+    { id: 3, y: 80, hp: 50, active: true },
+  ];
+
+  // Targeting filter
+  const validTargets = enemies.filter(e => e.active && e.y >= 25);
+  assert.strictEqual(validTargets.length, 1, 'Only visible enemies on highway can be targeted');
+  assert.strictEqual(validTargets[0].id, 3);
 });
 
 // 14. 6 Mission Archetypes Rotation

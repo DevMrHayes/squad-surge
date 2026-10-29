@@ -7,7 +7,8 @@
     "dev": "vite --port 5173 --host",
     "build": "tsc && vite build",
     "preview": "vite preview --port 5173",
-    "test": "node tests/verify-game.cjs",
+    "test": "node tests/verify-game.cjs && node tests/android-smoke-test.cjs",
+    "test:android": "node tests/android-smoke-test.cjs",
     "deploy": "firebase deploy --only hosting"
   },
   "dependencies": {

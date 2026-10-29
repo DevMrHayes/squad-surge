@@ -3,6 +3,10 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="theme-color" content="#050814" />
   <title>Squad Surge: 100-Level Tactical Highway</title>
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="icon" type="image/svg+xml" href="./icon.svg">
@@ -84,8 +88,9 @@
             <span id="headerAccountIcon">👤</span>
             <span id="headerAccountLabel" class="max-w-[70px] truncate">Sign In</span>
           </button>
-          <button id="btnPause" class="btn-tap w-8 h-8 rounded-full bg-slate-900 border border-slate-700/80 flex items-center justify-center text-xs text-slate-300">
-            ⏸
+          <button id="btnPause" class="btn-tap hidden px-2.5 py-1.5 rounded-full bg-slate-900 border border-slate-700/80 flex items-center justify-center gap-1 text-xs text-slate-300" title="Pause Tactical Mission" aria-label="Pause Tactical Mission">
+            <span>⏸</span>
+            <span class="text-[10px] font-bold hidden sm:inline">PAUSE</span>
           </button>
         </div>
       </div>
@@ -282,6 +287,11 @@
           <!-- Google Auth Button -->
           <button id="btnAuthGoogle" class="btn-tap w-full py-2.5 rounded-xl bg-white text-slate-900 font-extrabold text-xs flex items-center justify-center gap-2 shadow-sm hover:bg-slate-100">
             <span>🌐 Continue with Google</span>
+          </button>
+
+          <!-- Guest Mode Quick Play -->
+          <button id="btnPlayAsGuest" type="button" class="btn-tap w-full py-2 rounded-xl bg-slate-800 border border-slate-700 text-slate-300 font-bold text-xs flex items-center justify-center gap-1.5 hover:bg-slate-750">
+            <span>🎮 Continue as Guest (Offline Saves)</span>
           </button>
 
           <div class="flex items-center gap-2 my-0.5">
