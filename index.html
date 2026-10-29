@@ -54,8 +54,8 @@
 </head>
 <body class="flex items-center justify-center w-full h-full bg-slate-950">
 
-  <!-- MOBILE APP SHELL (Material Minimal Surface) -->
-  <div id="appShell" class="relative w-full h-full max-w-[440px] flex flex-col bg-[#0b101e] shadow-2xl overflow-hidden border-x border-slate-800/50">
+  <!-- MOBILE & TABLET RESPONSIVE APP SHELL (Phone + Kindle Fire / iPad) -->
+  <div id="appShell" class="relative w-full h-full max-w-[440px] sm:max-w-[580px] md:max-w-[660px] flex flex-col bg-[#0b101e] shadow-2xl overflow-hidden border-x border-slate-800/50">
 
     <!-- TOP MATERIAL MINIMAL HUD -->
     <header class="z-20 px-4 py-2.5 bg-[#0b101e] border-b border-white/[0.06] flex flex-col gap-2 shrink-0">
@@ -304,6 +304,27 @@
               </button>
               <button id="btnLogout" class="hidden btn-tap h-11 px-4 rounded-xl bg-slate-800 border border-slate-700 text-slate-300 font-bold text-xs uppercase">
                 Log Out
+              </button>
+            </div>
+          </div>
+
+          <!-- Kindle / Tablet Local Commander Slots & Callsign (Works 100% Offline Without Google) -->
+          <div id="localProfilesCard" class="p-3.5 rounded-2xl bg-[#161f33] border border-emerald-500/30 space-y-2.5">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-1.5">
+                <span class="text-sm">💾</span>
+                <span class="text-[11px] font-black uppercase tracking-wider text-[#7ce7ac]">Device Local Save (Kindle & Tablet Ready)</span>
+              </div>
+              <span class="px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase bg-[#2b3c35] text-[#a3e6b7]">Auto-Saved</span>
+            </div>
+            <p class="text-[11px] text-slate-300 leading-snug">
+              Progress saves automatically to this device (LocalStorage + IndexedDB)—no Google account required! Switch slots below if multiple players share this tablet:
+            </p>
+            <div id="localSlotsContainer" class="grid grid-cols-3 gap-2"></div>
+            <div class="flex items-center gap-2 pt-1">
+              <input id="inputLocalCommanderName" type="text" maxlength="20" placeholder="Enter Commander Name" class="flex-1 h-9 px-3 rounded-xl bg-[#0b101e] border border-white/10 text-xs font-bold text-white focus:outline-none focus:border-sky-400" />
+              <button id="btnSaveLocalName" class="btn-tap h-9 px-3.5 rounded-xl bg-[#1565c0] text-white text-[11px] font-bold uppercase tracking-wider">
+                Save Name
               </button>
             </div>
           </div>

@@ -1,8 +1,11 @@
-// Persistent Storage & Cloud Synchronization Manager
+// Persistent Storage & Cloud Synchronization Manager (with Kindle/Tablet Local Multi-Profile & IndexedDB Backup)
 import { SaveData } from '../types/game';
 import { saveProfileToCloud, loadProfileFromCloud, onCloudSaveSnapshot } from '../config/firebase';
 
 const STORAGE_KEY = 'squad_surge_save_v1';
+const ACTIVE_SLOT_KEY = 'squad_surge_active_slot';
+const IDB_NAME = 'SquadSurgeLocalDB';
+const IDB_STORE = 'saves';
 
 export const DEFAULT_SAVE: SaveData = {
   version: 1,
@@ -35,13 +38,158 @@ export const DEFAULT_SAVE: SaveData = {
 
 export class StorageManager {
   private currentSave: SaveData;
+  private activeSlot: number = 1;
   private onSaveUpdatedCallbacks: ((save: SaveData) => void)[] = [];
 
   constructor() {
+    this.activeSlot = this.loadActiveSlot();
     this.currentSave = this.loadLocal();
+    this.requestPersistentStorage();
+    this.restoreFromIndexedDBIfNeeded();
     onCloudSaveSnapshot((cloudSave) => {
       this.mergeCloudSave(cloudSave, false);
     });
+  }
+
+  private getSlotStorageKey(slot: number = this.activeSlot): string {
+    return slot <= 1 ? STORAGE_KEY : `${STORAGE_KEY}_slot${slot}`;
+  }
+
+  private getSlotNameKey(slot: number = this.activeSlot): string {
+    return `squad_surge_local_name_slot${slot}`;
+  }
+
+  private loadActiveSlot(): number {
+    try {
+      const raw = localStorage.getItem(ACTIVE_SLOT_KEY);
+      const parsed = Number(raw);
+      if (parsed >= 1 && parsed <= 3) return Math.floor(parsed);
+    } catch {
+      // ignore
+    }
+    return 1;
+  }
+
+  public getActiveSlot(): number {
+    return this.activeSlot;
+  }
+
+  public getLocalCommanderName(slot: number = this.activeSlot): string {
+    try {
+      const saved = localStorage.getItem(this.getSlotNameKey(slot));
+      if (saved && saved.trim()) return saved.trim();
+    } catch {
+      // ignore
+    }
+    return `Commander ${slot}`;
+  }
+
+  public setLocalCommanderName(name: string, slot: number = this.activeSlot): void {
+    const clean = (name || '').trim().slice(0, 24) || `Commander ${slot}`;
+    try {
+      localStorage.setItem(this.getSlotNameKey(slot), clean);
+      this.writeToIndexedDB(this.getSlotNameKey(slot), clean);
+      this.notify();
+    } catch {
+      // ignore
+    }
+  }
+
+  public getSlotSummary(slot: number): { slot: number; name: string; level: number; coins: number } {
+    try {
+      const raw = localStorage.getItem(this.getSlotStorageKey(slot));
+      const parsed = raw ? JSON.parse(raw) : DEFAULT_SAVE;
+      return {
+        slot,
+        name: this.getLocalCommanderName(slot),
+        level: parsed.level || 1,
+        coins: parsed.coins ?? 150,
+      };
+    } catch {
+      return { slot, name: `Commander ${slot}`, level: 1, coins: 150 };
+    }
+  }
+
+  public switchLocalSlot(slot: number): SaveData {
+    const targetSlot = Math.max(1, Math.min(3, Math.floor(slot)));
+    this.activeSlot = targetSlot;
+    try {
+      localStorage.setItem(ACTIVE_SLOT_KEY, String(targetSlot));
+    } catch {
+      // ignore
+    }
+    this.currentSave = this.loadLocal();
+    this.restoreFromIndexedDBIfNeeded();
+    this.notify();
+    return this.currentSave;
+  }
+
+  private requestPersistentStorage(): void {
+    try {
+      if (typeof navigator !== 'undefined' && navigator.storage && navigator.storage.persist) {
+        navigator.storage.persist().catch(() => {});
+      }
+    } catch {
+      // ignore on unsupported browsers
+    }
+  }
+
+  private writeToIndexedDB(key: string, value: any): void {
+    try {
+      if (typeof indexedDB === 'undefined') return;
+      const req = indexedDB.open(IDB_NAME, 1);
+      req.onupgradeneeded = () => {
+        const db = req.result;
+        if (!db.objectStoreNames.contains(IDB_STORE)) {
+          db.createObjectStore(IDB_STORE);
+        }
+      };
+      req.onsuccess = () => {
+        try {
+          const db = req.result;
+          const tx = db.transaction(IDB_STORE, 'readwrite');
+          tx.objectStore(IDB_STORE).put(value, key);
+        } catch {
+          // ignore
+        }
+      };
+    } catch {
+      // ignore
+    }
+  }
+
+  private restoreFromIndexedDBIfNeeded(): void {
+    try {
+      if (typeof indexedDB === 'undefined') return;
+      const key = this.getSlotStorageKey();
+      const hasLocal = typeof localStorage !== 'undefined' && !!localStorage.getItem(key);
+      const req = indexedDB.open(IDB_NAME, 1);
+      req.onupgradeneeded = () => {
+        const db = req.result;
+        if (!db.objectStoreNames.contains(IDB_STORE)) {
+          db.createObjectStore(IDB_STORE);
+        }
+      };
+      req.onsuccess = () => {
+        try {
+          const db = req.result;
+          const tx = db.transaction(IDB_STORE, 'readonly');
+          const getReq = tx.objectStore(IDB_STORE).get(key);
+          getReq.onsuccess = () => {
+            const idbSave = getReq.result as SaveData | undefined;
+            if (idbSave && (!hasLocal || (idbSave.maxLevel || 1) > (this.currentSave.maxLevel || 1))) {
+              this.mergeCloudSave(idbSave, false);
+            } else {
+              this.writeToIndexedDB(key, this.currentSave);
+            }
+          };
+        } catch {
+          // ignore
+        }
+      };
+    } catch {
+      // ignore
+    }
   }
 
   public getSave(): SaveData {
@@ -58,7 +206,8 @@ export class StorageManager {
 
   private loadLocal(): SaveData {
     try {
-      const raw = localStorage.getItem(STORAGE_KEY);
+      const key = this.getSlotStorageKey();
+      const raw = localStorage.getItem(key);
       if (!raw) return JSON.parse(JSON.stringify(DEFAULT_SAVE));
       const parsed = JSON.parse(raw);
       return {
@@ -75,7 +224,9 @@ export class StorageManager {
 
   public saveLocal(syncCloud = true): void {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(this.currentSave));
+      const key = this.getSlotStorageKey();
+      localStorage.setItem(key, JSON.stringify(this.currentSave));
+      this.writeToIndexedDB(key, this.currentSave);
       this.notify();
       if (syncCloud) {
         saveProfileToCloud(this.currentSave).catch(() => {});

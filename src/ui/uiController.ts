@@ -475,13 +475,14 @@ export class UIController {
     `;
 
     if (!profile) {
+      const localName = storage.getLocalCommanderName();
       if (avatar) avatar.innerHTML = defaultAvatarSvg;
-      if (name) name.textContent = 'Guest Commander';
+      if (name) name.textContent = localName;
       if (pill) {
-        pill.textContent = 'GUEST MODE';
-        pill.className = 'px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-[#1e293b] text-slate-300 border border-slate-700';
+        pill.textContent = localName.toUpperCase();
+        pill.className = 'px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-[#2b3c35] text-[#a3e6b7] border border-[#456355]/50';
       }
-      if (email) email.textContent = '⚠️ Progress saved locally only';
+      if (email) email.textContent = '💾 Saved on this device (Local Save)';
       if (btnContainer) {
         btnContainer.innerHTML = `
           <button id="btnBriefingAction" class="btn-tap px-3.5 py-1.5 rounded-full bg-[#d0bfff] text-[#1a112e] font-extrabold text-[10px] uppercase tracking-wider shadow-sm">
@@ -1027,13 +1028,60 @@ export class UIController {
     const save = storage.getSave();
     const user = getCurrentUser();
     const profile = getCurrentProfile();
+    const localName = storage.getLocalCommanderName();
 
-    document.getElementById('profileName')!.textContent = profile?.displayName || user?.displayName || 'Commander';
+    document.getElementById('profileName')!.textContent = profile?.displayName || user?.displayName || localName;
     document.getElementById('cloudStatus')!.textContent = profile?.status === 'APPROVED' 
       ? '🟢 Cloud Sync Active' 
       : profile?.status === 'PENDING'
       ? '🟡 Pending Admin Whitelist'
-      : '⚪ Offline Local Mode';
+      : `💾 Device Local Save Active (${localName})`;
+
+    // Render Kindle / Tablet Local Profile Slots & Name Editor
+    const slotsContainer = document.getElementById('localSlotsContainer');
+    const nameInput = document.getElementById('inputLocalCommanderName') as HTMLInputElement | null;
+    const btnSaveName = document.getElementById('btnSaveLocalName');
+    if (nameInput) {
+      nameInput.value = localName;
+    }
+    if (btnSaveName && nameInput) {
+      btnSaveName.onclick = () => {
+        storage.setLocalCommanderName(nameInput.value);
+        sfx.playGateCharge();
+        this.renderProfile();
+        this.updateBriefingProfileCard(getCurrentProfile());
+      };
+    }
+    if (slotsContainer) {
+      slotsContainer.innerHTML = '';
+      const activeSlot = storage.getActiveSlot();
+      for (let s = 1; s <= 3; s++) {
+        const sum = storage.getSlotSummary(s);
+        const isActive = s === activeSlot;
+        const slotBtn = document.createElement('button');
+        slotBtn.className = `btn-tap p-2 rounded-xl border text-left transition-all ${
+          isActive
+            ? 'bg-[#1565c0] border-sky-300/60 text-white shadow-md'
+            : 'bg-[#0b101e] border-white/10 text-slate-300 hover:border-white/25'
+        }`;
+        slotBtn.innerHTML = `
+          <div class="text-[10px] font-black uppercase truncate">${sum.name}</div>
+          <div class="text-[10px] font-mono-num mt-0.5 ${isActive ? 'text-sky-100' : 'text-slate-400'}">
+            Lv. ${sum.level} • ${sum.coins} 🪙
+          </div>
+        `;
+        slotBtn.addEventListener('click', () => {
+          const switched = storage.switchLocalSlot(s);
+          sfx.playGateCharge();
+          if (this.game.mode !== 'PLAYING') {
+            this.game.initLevel(switched.level, false);
+            this.showStartBriefing();
+          }
+          this.renderProfile();
+        });
+        slotsContainer.appendChild(slotBtn);
+      }
+    }
 
     const statHighScore = document.getElementById('statHighScore');
     if (statHighScore) statHighScore.textContent = `${save.stats.highScore || 0}`;

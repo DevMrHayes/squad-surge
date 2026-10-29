@@ -986,6 +986,27 @@ it('Material Minimal dashboard renders Campaign & Endless Survival views and hig
   assert.ok(uiSrc.includes('text-[#63e6be]'), 'uiController renders high-contrast mint-cyan affordable upgrade cost pill');
 });
 
+// 39. Tablet / Kindle Responsive Scaling & Multi-Slot Local Save Persistence
+it('Tablet/Kindle viewport scaling and offline multi-slot local save persistence work without Google login', () => {
+  const fs = require('fs');
+  const path = require('path');
+  const htmlSrc = fs.readFileSync(path.join(__dirname, '../index.html'), 'utf8');
+  const storageSrc = fs.readFileSync(path.join(__dirname, '../src/services/storage.ts'), 'utf8');
+  const loopSrc = fs.readFileSync(path.join(__dirname, '../src/engine/gameLoop.ts'), 'utf8');
+
+  // 1. Responsive phone + tablet container widths
+  assert.ok(htmlSrc.includes('sm:max-w-[580px]') && htmlSrc.includes('md:max-w-[660px]'), 'appShell expands responsively for Kindle/tablet screens');
+
+  // 2. LocalStorage + IndexedDB dual backup + persistent storage request for Kindle Silk browser
+  assert.ok(storageSrc.includes('SquadSurgeLocalDB') && storageSrc.includes('navigator.storage.persist'), 'StorageManager persists saves to both LocalStorage and IndexedDB');
+
+  // 3. 3-slot local profile switcher & custom commander callsign
+  assert.ok(storageSrc.includes('switchLocalSlot') && storageSrc.includes('setLocalCommanderName'), 'StorageManager supports 3 local player slots and custom names');
+
+  // 4. Canvas resize uses setTransform and re-centers gates on tablet orientation/width changes
+  assert.ok(loopSrc.includes('this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0)'), 'GameLoop.resize uses setTransform for clean tablet scaling');
+});
+
 console.log('====================================================');
 console.log(`  Tests Completed: ${passedTests} / ${totalTests} Passed`);
 console.log('====================================================');

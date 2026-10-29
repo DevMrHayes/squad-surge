@@ -141,15 +141,29 @@ export class GameLoop {
   public resize(): void {
     const rect = this.canvas.parentElement?.getBoundingClientRect() || { width: 380, height: 640 };
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    this.cw = rect.width;
-    this.ch = rect.height;
+    this.cw = Math.max(320, rect.width);
+    this.ch = Math.max(480, rect.height);
 
     this.canvas.width = Math.floor(this.cw * dpr);
     this.canvas.height = Math.floor(this.ch * dpr);
-    this.ctx.scale(dpr, dpr);
+    this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
     if (this.player) {
       this.player.y = this.ch * 0.78;
+      if (this.mode === 'READY') {
+        this.player.x = this.cw / 2;
+        this.targetX = this.cw / 2;
+        // Re-align any pre-spawned ready gates to current tablet/phone width
+        const margin = 18;
+        const centerDividerW = 24;
+        const laneW = (this.cw - margin * 2 - centerDividerW) / 2;
+        for (const g of this.gates) {
+          g.w = laneW;
+          g.x = g.lane === 'LEFT'
+            ? margin + laneW / 2
+            : margin + laneW + centerDividerW + laneW / 2;
+        }
+      }
     }
   }
 
@@ -344,7 +358,7 @@ export class GameLoop {
       id: Math.random(),
       x,
       y: -48,
-      w: Math.min(104, laneW - 8),
+      w: Math.min(136, laneW - 8),
       h: 48,
       hp: cDef.hp,
       maxHp: cDef.maxHp,
@@ -357,20 +371,22 @@ export class GameLoop {
 
   private spawnObstacleEntity(oDef: ObstacleQueueItem): void {
     const isLeft = oDef.lane === 'LEFT';
-    const prismX = isLeft ? 54 : this.cw - 54;
+    const scaleFactor = Math.max(1, Math.min(1.4, this.cw / 390));
+    const prismMargin = Math.round(54 * scaleFactor);
+    const prismX = isLeft ? prismMargin : this.cw - prismMargin;
     const stripX = isLeft ? this.cw * 0.27 : this.cw * 0.73;
     let ox = stripX;
-    let ow = 116;
+    let ow = Math.round(116 * scaleFactor);
     let oh = 110;
 
     if (oDef.type === 'PRISM_MIRROR') {
       ox = prismX;
-      ow = 78;
+      ow = Math.round(78 * scaleFactor);
       oh = 76;
     } else if (oDef.type === 'BEAM_SPLITTER') {
       ox = this.cw / 2;
-      ow = 42;
-      oh = 42;
+      ow = Math.round(42 * scaleFactor);
+      oh = Math.round(42 * scaleFactor);
     }
 
     this.obstacles.push({
