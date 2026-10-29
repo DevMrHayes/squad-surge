@@ -119,11 +119,11 @@ export class GameRenderer {
         ctx.save();
         const isLeft = obs.lane === 'LEFT' || obs.angleDeg > 0;
         const wallX = isLeft ? roadMargin : cw - roadMargin;
-        const jut = 34 * (isLeft ? 1 : -1);
-        const halfH = 36;
+        const jut = 68 * (isLeft ? 1 : -1);
+        const halfH = 38;
 
-        // Flush Wall-Mounted Triangular Energy Bumper
-        ctx.fillStyle = 'rgba(15, 23, 42, 0.92)';
+        // Flush Wall-Mounted Triangular Energy Bumper (spans into firing lane)
+        ctx.fillStyle = 'rgba(15, 23, 42, 0.94)';
         ctx.strokeStyle = '#38bdf8';
         ctx.lineWidth = 2;
         ctx.beginPath();
@@ -136,26 +136,26 @@ export class GameRenderer {
 
         // Glowing Reflective Mirror Bevel Face (Bottom angled edge facing player shots)
         ctx.strokeStyle = '#fde047';
-        ctx.lineWidth = 3.5;
+        ctx.lineWidth = 4;
         ctx.beginPath();
         ctx.moveTo(wallX, obs.y + halfH);
         ctx.lineTo(wallX + jut, obs.y);
         ctx.stroke();
 
         // Dotted Ricochet Trajectory Guide
-        ctx.strokeStyle = 'rgba(250, 204, 21, 0.45)';
+        ctx.strokeStyle = 'rgba(250, 204, 21, 0.55)';
         ctx.lineWidth = 1.5;
         ctx.setLineDash([4, 4]);
         ctx.beginPath();
-        ctx.moveTo(wallX + jut * 0.6, obs.y + halfH * 0.4);
-        ctx.lineTo(wallX + jut * 2.2, obs.y - halfH * 0.6);
+        ctx.moveTo(wallX + jut * 0.55, obs.y + halfH * 0.45);
+        ctx.lineTo(wallX + jut * 1.85, obs.y - halfH * 0.55);
         ctx.stroke();
         ctx.setLineDash([]);
 
         ctx.fillStyle = '#fde047';
         ctx.font = '800 8px "JetBrains Mono", monospace';
         ctx.textAlign = isLeft ? 'left' : 'right';
-        ctx.fillText('RICOCHET', wallX + (isLeft ? 4 : -4), obs.y - halfH - 4);
+        ctx.fillText('RICOCHET +35%', wallX + (isLeft ? 4 : -4), obs.y - halfH - 4);
 
         ctx.restore();
       }

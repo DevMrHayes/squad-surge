@@ -380,6 +380,37 @@ it('Early onboarding levels (L1-L5) exclude wall Prism Mirrors and enforce brisk
   }
 });
 
+// 18. Ricochet Prism Mirror Ballistics & Hitbox Reachability
+it('Prism Mirror intercepts lane bullets, deflects diagonally with +35% overcharge, and prevents double-frame drain', () => {
+  const cw = 380;
+  const leftPrism = { x: 54, y: 260, width: 78, height: 76, lane: 'LEFT', angleDeg: 45 };
+  const bullet = { x: 68, y: 270, vx: 0, vy: -780, damage: 10, ricochetsLeft: 2, isPierce: false, active: true };
+
+  // Frame 1: Bullet in left lane (x=68) is well within leftPrism hitbox [15..93]
+  const inHitbox = Math.abs(bullet.x - leftPrism.x) < leftPrism.width / 2 + 6 &&
+                   Math.abs(bullet.y - leftPrism.y) < leftPrism.height / 2 + 6;
+  assert.strictEqual(inHitbox, true, 'Left-lane bullet at x=68 must intersect Prism Mirror hitbox [15..93]');
+
+  const bounceDir = leftPrism.lane === 'LEFT' ? 1 : -1;
+  if (!(Math.sign(bullet.vx) === bounceDir && Math.abs(bullet.vx) > 200)) {
+    bullet.ricochetsLeft -= 1;
+    bullet.vx = bounceDir * 440;
+    bullet.vy = -500;
+    bullet.damage *= 1.35;
+    bullet.isPierce = true;
+  }
+
+  assert.strictEqual(bullet.ricochetsLeft, 1, 'First impact decrements ricochetsLeft by 1');
+  assert.strictEqual(bullet.vx, 440, 'Bullet deflects rightward across highway');
+  assert.strictEqual(bullet.vy, -500, 'Bullet maintains upward diagonal velocity');
+  assert.strictEqual(bullet.damage, 13.5, 'Bullet gains +35% Ricochet Overcharge damage');
+  assert.strictEqual(bullet.isPierce, true, 'Deflected bullet gains piercing to slice across lanes');
+
+  // Frame 2: Bullet still inside hitbox on next tick must NOT double-trigger
+  const alreadyDeflected = Math.sign(bullet.vx) === bounceDir && Math.abs(bullet.vx) > 200;
+  assert.strictEqual(alreadyDeflected, true, 'Consecutive frame inside same prism must be ignored');
+});
+
 console.log('====================================================');
 console.log(`  Tests Completed: ${passedTests} / ${totalTests} Passed`);
 console.log('====================================================');

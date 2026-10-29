@@ -417,16 +417,6 @@ export class WaveGenerator {
       }
 
       // 2. FIELD OBSTACLES
-      // Ricochet Prism Mirrors ONLY spawn starting at Level 6+ (Never cluttering Level 2!)
-      if (level >= 6 && (archetype.id === 'ARMORED_SIEGE' || sector === 3 || (sector > 3 && w % 2 === 0))) {
-        obstacleQueue.push({
-          spawnTime: cursorTime + 0.5,
-          type: 'PRISM_MIRROR',
-          lane: greedLane === 0 ? 'LEFT' : 'RIGHT',
-          angleDeg: greedLane === 0 ? 45 : -45,
-        });
-      }
-
       if (level >= 4 && (archetype.id === 'PRECISION_GRID' || (sector >= 2 && w === 1))) {
         obstacleQueue.push({
           spawnTime: cursorTime + 0.9,
@@ -477,6 +467,19 @@ export class WaveGenerator {
 
       cursorTime += 2.2;
 
+      // Ricochet Prism Mirrors spawn in the open firing corridor alongside Armory Crates / Main Assault
+      // so Gates in front never block the player's line of fire to the reflective bevel!
+      const crateLane3 = (level + w) % 3;
+      if (level >= 6 && (w === 0 || archetype.id === 'ARMORED_SIEGE' || archetype.id === 'PRECISION_GRID' || sector >= 2)) {
+        const mirrorOnLeft = crateLane3 !== 0; // Opposite wall from Crate so shots bank around the Crate!
+        obstacleQueue.push({
+          spawnTime: cursorTime - 0.15,
+          type: 'PRISM_MIRROR',
+          lane: mirrorOnLeft ? 'LEFT' : 'RIGHT',
+          angleDeg: mirrorOnLeft ? 45 : -45,
+        });
+      }
+
       // 4. ARMORY CRATES & SPECIALISTS (High durability so they act as real tactical barriers)
       if (level >= 2 && (w % 2 === 0 || w === waveCount - 1)) {
         const boostType = archetype.id === 'SWARM_INFILTRATION' ? 'VANGUARD'
@@ -496,7 +499,6 @@ export class WaveGenerator {
                     : '#fb923c';
 
         const crateHP = Math.round(baseEnemyHP * (2.35 + w * 0.35));
-        const crateLane3 = (level + w) % 3;
         crateQueue.push({
           spawnTime: cursorTime,
           lane3: crateLane3,

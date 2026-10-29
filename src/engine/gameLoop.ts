@@ -276,14 +276,16 @@ export class GameLoop {
   }
 
   private spawnObstacleEntity(oDef: ObstacleQueueItem): void {
-    const laneX = oDef.lane === 'LEFT' ? 24 : this.cw - 24;
+    const isLeft = oDef.lane === 'LEFT';
+    const prismX = isLeft ? 54 : this.cw - 54;
+    const stripX = isLeft ? this.cw * 0.27 : this.cw * 0.73;
     this.obstacles.push({
       id: Math.random(),
       type: oDef.type,
-      x: oDef.type === 'PRISM_MIRROR' ? laneX : this.cw / 2,
+      x: oDef.type === 'PRISM_MIRROR' ? prismX : stripX,
       y: -50,
-      width: oDef.type === 'PRISM_MIRROR' ? 32 : 110,
-      height: oDef.type === 'PRISM_MIRROR' ? 80 : 120,
+      width: oDef.type === 'PRISM_MIRROR' ? 78 : 116,
+      height: oDef.type === 'PRISM_MIRROR' ? 76 : 110,
       angleDeg: oDef.angleDeg,
       lane: oDef.lane,
       overclockRate: oDef.overclockRate,
@@ -445,7 +447,7 @@ export class GameLoop {
       this.trauma = Math.min(1.0, this.trauma + amt);
     }, this.shockwaves);
 
-    CombatEngine.handleObstacleInteractions(this.player, this.obstacles, this.bullets, dt);
+    CombatEngine.handleObstacleInteractions(this.player, this.obstacles, this.bullets, dt, this.particles);
 
     CombatEngine.handleGateAndCrateHits(
       this.gates, 

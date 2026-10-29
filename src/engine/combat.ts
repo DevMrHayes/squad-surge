@@ -135,6 +135,7 @@ export class CombatEngine {
           isPierce: true,
           isLaser: true,
           isFromPlayer: true,
+          ricochetsLeft: 2,
           active: true,
         });
       }
@@ -181,6 +182,7 @@ export class CombatEngine {
           color: '#06b6d4',
           isPierce: true,
           isFromPlayer: true,
+          ricochetsLeft: 2,
           active: true,
         });
       }
@@ -204,6 +206,7 @@ export class CombatEngine {
           color: '#f97316',
           isBlast: true,
           isFromPlayer: true,
+          ricochetsLeft: 2,
           active: true,
         });
       });
@@ -303,6 +306,21 @@ export class CombatEngine {
       b.x += b.vx * dt;
       b.y += b.vy * dt;
 
+      // Secondary wall-rail bank for ricocheting bullets
+      if (Math.abs(b.vx) > 100 && (b.ricochetsLeft ?? 0) > 0) {
+        if (b.x <= 18 && b.vx < 0) {
+          b.x = 20;
+          b.vx = Math.abs(b.vx);
+          b.ricochetsLeft = (b.ricochetsLeft || 1) - 1;
+          this.createExplosionParticles(b.x, b.y, '#fde047', particles, 4, true);
+        } else if (b.x >= 362 && b.vx > 0) {
+          b.x = 360;
+          b.vx = -Math.abs(b.vx);
+          b.ricochetsLeft = (b.ricochetsLeft || 1) - 1;
+          this.createExplosionParticles(b.x, b.y, '#fde047', particles, 4, true);
+        }
+      }
+
       // Bullets deactivate upon reaching visible highway border (no off-screen travel)
       if (b.y < 20 || b.y > 900 || b.x < -20 || b.x > 450) {
         b.active = false;
@@ -314,7 +332,8 @@ export class CombatEngine {
     player: PlayerState, 
     obstacles: FieldObstacle[], 
     bullets: Bullet[],
-    dt: number
+    dt: number,
+    particles?: Particle[]
   ): void {
     player.fireRateMultiplier = 1.0;
     player.dragSpeedMultiplier = 1.0;
@@ -339,8 +358,11 @@ export class CombatEngine {
       }
 
       if (obs.type === 'PRISM_MIRROR') {
+        const bounceDirection = (obs.lane === 'LEFT' || obs.angleDeg > 0) ? 1 : -1;
         bullets.forEach(b => {
-          if (!b.active || !b.isFromPlayer || (b.ricochetsLeft ?? 0) <= 0) return;
+          if (!b.active || !b.isFromPlayer || (b.ricochetsLeft ?? 2) <= 0) return;
+          // Prevent double-colliding if bullet was already deflected in this direction
+          if (Math.sign(b.vx) === bounceDirection && Math.abs(b.vx) > 200) return;
 
           const collides = 
             b.x >= obs.x - obs.width / 2 && 
@@ -349,11 +371,16 @@ export class CombatEngine {
             b.y <= obs.y + obs.height / 2;
 
           if (collides) {
-            b.ricochetsLeft = (b.ricochetsLeft || 2) - 1;
-            const bounceDirection = obs.angleDeg > 0 ? 1 : -1;
-            b.vx = bounceDirection * 360;
-            b.vy = -460;
-            b.color = '#f59e0b';
+            b.ricochetsLeft = (b.ricochetsLeft ?? 2) - 1;
+            b.vx = bounceDirection * 440;
+            b.vy = -500;
+            b.damage *= 1.35; // Ricochet Overcharge (+35% damage)
+            b.radius = Math.max(4.5, b.radius);
+            b.color = '#fde047';
+            b.isPierce = true; // Ricocheted shots slice cleanly across into opposite lane enemies
+            if (particles) {
+              this.createExplosionParticles(b.x, b.y, '#fde047', particles, 5, true);
+            }
             sfx.playRicochet();
           }
         });
