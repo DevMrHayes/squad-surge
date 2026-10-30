@@ -38,6 +38,19 @@ export class UIController {
   private pendingModal = document.getElementById('pendingModal')!;
   private adminModal = document.getElementById('adminModal')!;
 
+  // Dynamic Tally & Badge Reveal Timers
+  private tallyAnimId: number | null = null;
+  private accoladeTimeouts: number[] = [];
+
+  private cancelTallyAnimation(): void {
+    if (this.tallyAnimId !== null) {
+      cancelAnimationFrame(this.tallyAnimId);
+      this.tallyAnimId = null;
+    }
+    this.accoladeTimeouts.forEach(id => clearTimeout(id));
+    this.accoladeTimeouts = [];
+  }
+
   constructor(game: GameLoop) {
     this.game = game;
     this.setupListeners();
@@ -368,6 +381,8 @@ export class UIController {
   }
 
   public showResult(won: boolean, coins: number, reason?: string, details?: any): void {
+    this.cancelTallyAnimation();
+
     const resIcon = document.getElementById('resIcon')!;
     const resTitle = document.getElementById('resTitle')!;
     const resDesc = document.getElementById('resDesc')!;
@@ -379,11 +394,15 @@ export class UIController {
     const btnNext = document.getElementById('btnNext')!;
     const btnRetry = document.getElementById('btnRetry')!;
 
+    // Accolades with animated staggered pop-in
     if (won && details?.accolades && details.accolades.length > 0) {
       if (resAccoladesRow) resAccoladesRow.classList.remove('hidden');
       if (resAccoladesList) {
-        resAccoladesList.innerHTML = details.accolades.map((acc: any) => `
-          <div class="flex items-center justify-between py-0.5 text-[11px]">
+        resAccoladesList.innerHTML = details.accolades.map((acc: any, index: number) => `
+          <div 
+            id="accolade-badge-${index}" 
+            class="flex items-center justify-between py-1 px-2.5 rounded-lg bg-slate-900/60 border border-white/10 opacity-0 transform translate-y-1.5 transition-all duration-300 text-[11px]"
+          >
             <span class="text-slate-300 flex items-center gap-1.5 font-sans">
               <span>${acc.icon}</span>
               <span class="font-bold text-white">${acc.name}</span>
@@ -391,6 +410,18 @@ export class UIController {
             <span class="text-amber-400 font-bold font-mono-num">+${acc.coins} 🪙</span>
           </div>
         `).join('');
+
+        details.accolades.forEach((_: any, index: number) => {
+          const tid = window.setTimeout(() => {
+            const badge = document.getElementById(`accolade-badge-${index}`);
+            if (badge) {
+              badge.classList.remove('opacity-0', 'translate-y-1.5');
+              badge.classList.add('opacity-100', 'translate-y-0');
+              sfx.playGateCharge();
+            }
+          }, 160 * (index + 1));
+          this.accoladeTimeouts.push(tid);
+        });
       }
     } else {
       if (resAccoladesRow) resAccoladesRow.classList.add('hidden');
@@ -413,7 +444,6 @@ export class UIController {
 
       if (resBaseReward) resBaseReward.textContent = `${timeStr} ⏱️`;
       if (resSurvivalBonus) resSurvivalBonus.textContent = `Threat LV. ${details.threatLevel || 1} ⚡`;
-      resCoins.textContent = `+${coins} 🪙`;
 
       btnRetry.textContent = 'Retry Survival';
       btnNext.textContent = 'Campaign Mode ▸';
@@ -433,7 +463,7 @@ export class UIController {
       const baseReward = Math.max(0, coins - survivalBonus - accoladeBonus);
       if (resBaseReward) resBaseReward.textContent = `+${baseReward} 🪙`;
       if (resSurvivalBonus) resSurvivalBonus.textContent = `+${survivalBonus} 🪙 (+${this.game.player.count} 👥)`;
-      resCoins.textContent = `+${coins} 🪙`;
+
       btnRetry.textContent = 'Retry';
       btnNext.textContent = 'Next Level ▸';
       btnNext.classList.remove('hidden');
@@ -455,9 +485,41 @@ export class UIController {
 
       if (resBaseReward) resBaseReward.textContent = `+0 🪙`;
       if (resSurvivalBonus) resSurvivalBonus.textContent = `+0 🪙 (0 👥)`;
-      resCoins.textContent = `+${coins} 🪙`;
+
       btnRetry.textContent = 'Retry';
       btnNext.classList.add('hidden');
+    }
+
+    // Dynamic Count-Up Tally Animation (~1.1s)
+    if (coins <= 0) {
+      resCoins.textContent = '+0 🪙';
+    } else {
+      const duration = 1100;
+      const startTime = performance.now();
+      let lastTick = 0;
+
+      const updateTally = (now: number) => {
+        const elapsed = now - startTime;
+        const p = Math.min(1.0, elapsed / duration);
+        const ease = 1 - Math.pow(1 - p, 3);
+        const currentVal = Math.round(ease * coins);
+
+        resCoins.textContent = `+${currentVal} 🪙`;
+
+        if (now - lastTick > 90 && p < 1.0) {
+          lastTick = now;
+          sfx.playLaser(680 + p * 300);
+        }
+
+        if (p < 1.0) {
+          this.tallyAnimId = requestAnimationFrame(updateTally);
+        } else {
+          resCoins.textContent = `+${coins} 🪙`;
+          this.tallyAnimId = null;
+        }
+      };
+
+      this.tallyAnimId = requestAnimationFrame(updateTally);
     }
 
     this.btnPause?.classList.add('hidden');
@@ -731,22 +793,35 @@ export class UIController {
       (e.currentTarget as HTMLElement).textContent = enabled ? '🔊 Sound: ON' : '🔇 Sound: OFF';
     });
 
-    // Result buttons
-    document.getElementById('btnRetry')?.addEventListener('click', () => {
+    // Result action buttons
+    document.getElementById('btnResultHome')?.addEventListener('click', () => {
+      this.cancelTallyAnimation();
       this.resultModal.classList.add('hidden');
       this.game.initLevel(this.game.currentLevel, this.game.isEndless);
       this.showStartBriefing();
     });
 
-    document.getElementById('btnNext')?.addEventListener('click', () => {
+    document.getElementById('btnRetry')?.addEventListener('click', () => {
+      this.cancelTallyAnimation();
       this.resultModal.classList.add('hidden');
+      this.startOverlay.classList.add('hidden');
+      this.btnPause?.classList.remove('hidden');
+      this.game.initLevel(this.game.currentLevel, this.game.isEndless);
+      this.game.startCombat();
+    });
+
+    document.getElementById('btnNext')?.addEventListener('click', () => {
+      this.cancelTallyAnimation();
+      this.resultModal.classList.add('hidden');
+      this.startOverlay.classList.add('hidden');
+      this.btnPause?.classList.remove('hidden');
       if (this.game.isEndless) {
         const save = storage.getSave();
         this.game.initLevel(save.level, false);
       } else {
         this.game.initLevel(Math.min(100, this.game.currentLevel + 1), false);
       }
-      this.showStartBriefing();
+      this.game.startCombat();
     });
 
     // 1-100 Map Modal

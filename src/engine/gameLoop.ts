@@ -596,12 +596,15 @@ export class GameLoop {
         this.plan.scrollSpeed = 0;
       }
 
-      // Duration Accolade Milestones: 60s (+10 🪙), 120s (+20 🪙), 180s (+35 🪙), 300s (+60 🪙)
+      // High-Yield Duration Accolade Milestones (scales with 2k+ upgrade costs):
       const durationMilestones = [
-        { sec: 60, coins: 10, name: 'INITIAL SURGE (1 MIN)' },
-        { sec: 120, coins: 20, name: 'MOMENTUM (2 MIN)' },
-        { sec: 180, coins: 35, name: 'SUSTAINED PRESSURE (3 MIN)' },
-        { sec: 300, coins: 60, name: 'ENDLESS LEGEND (5 MIN)' },
+        { sec: 30, coins: 50, name: 'TACTICAL START (30 SEC)' },
+        { sec: 60, coins: 150, name: 'INITIAL SURGE (1 MIN)' },
+        { sec: 120, coins: 500, name: 'MOMENTUM (2 MIN)' },
+        { sec: 180, coins: 1500, name: 'SUSTAINED PRESSURE (3 MIN)' },
+        { sec: 300, coins: 5000, name: 'ENDLESS COLOSSUS (5 MIN)' },
+        { sec: 420, coins: 10000, name: 'APEX VANGUARD (7 MIN)' },
+        { sec: 600, coins: 25000, name: 'HIGHWAY GOD (10 MIN)' },
       ];
       for (const m of durationMilestones) {
         if (this.endlessTimeSurvived >= m.sec && !this.endlessMilestonesClaimed.has(m.sec)) {
@@ -885,12 +888,23 @@ export class GameLoop {
     // Boss Arena Standoff Check: Detect Titan/Warden bosses and halt highway advance
     const activeBoss = this.enemies.find(e => e.active && e.isBoss && (e.type === 'TITAN' || e.type === 'WARDEN' || e.type === 'CAPTAIN'));
     if (activeBoss) {
-      if (!this.isBossArenaActive && activeBoss.y >= this.ch * 0.18) {
-        this.isBossArenaActive = true;
-        this.arenaBoss = activeBoss;
-        this.plan.scrollSpeed = 0;
-        sfx.playBossWarning();
-        this.spawnFloatText(this.cw / 2, this.ch * 0.14, `🚨 STANDOFF LOCK: ${activeBoss.name || activeBoss.type}!`, '#ef4444', 16);
+      // Pre-Boss Barrier & Crate Clearance Check:
+      // Ensure any buff gates and armory crates ahead of the player reach the squad line before locking standoff!
+      const allPreGatesCleared = this.gates.length === 0 || this.gates.every(g => g.y >= squadY - 12);
+      const allPreCratesCleared = this.crates.length === 0 || this.crates.every(c => c.y >= squadY - 12);
+
+      if (!this.isBossArenaActive) {
+        if (activeBoss.y >= this.ch * 0.18 && allPreGatesCleared && allPreCratesCleared) {
+          this.isBossArenaActive = true;
+          this.arenaBoss = activeBoss;
+          this.plan.scrollSpeed = 0;
+          sfx.playBossWarning();
+          this.spawnFloatText(this.cw / 2, this.ch * 0.14, `🚨 STANDOFF LOCK: ${activeBoss.name || activeBoss.type}!`, '#ef4444', 16);
+        } else if (activeBoss.y >= this.ch * 0.20) {
+          // Boss arrived at standoff distance, but pre-boss gates are still scrolling down to the player:
+          // Hold boss at standoff distance while highway continues scrolling gates directly to the squad!
+          activeBoss.y = this.ch * 0.20;
+        }
       }
     } else if (this.isBossArenaActive) {
       this.isBossArenaActive = false;
@@ -922,6 +936,12 @@ export class GameLoop {
         else if (e.type === 'SHOOTER') bounty = 4;
         else if (e.type === 'SPRINTER') bounty = 2;
         else if (e.type === 'MINE') bounty = 1;
+
+        // Endless Threat Scaling Kill Bounty (Multiplies coins by threat level)
+        if (this.isEndless) {
+          const endlessThreatMult = Math.max(1, Math.floor(this.endlessThreatLevel * 0.75));
+          bounty = bounty * endlessThreatMult;
+        }
 
         this.sessionCoinsEarned += bounty;
         this.sessionScore += (bounty * 10) + (e.isBoss ? 1500 : 100);

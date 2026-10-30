@@ -157,6 +157,19 @@ export interface BossArmorPlate {
   h: number;
 }
 
+export interface BossBarrierShield {
+  id: string;
+  name: string;
+  hp: number;
+  maxHp: number;
+  broken: boolean;
+  relX: number;
+  relY: number;
+  w: number;
+  h: number;
+  deflector?: boolean; // When true, absorbs frontal fire; deflected ricochet shots bypass to hit the boss!
+}
+
 export interface Enemy {
   id: number;
   type: EnemyType;
@@ -179,6 +192,7 @@ export interface Enemy {
   healTimer?: number;
   bossPhase: number;
   armorPlates?: BossArmorPlate[];
+  guardShields?: BossBarrierShield[];
   enraged?: boolean;
   enrageDeployed?: boolean;
   active: boolean;

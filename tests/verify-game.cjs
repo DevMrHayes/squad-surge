@@ -1031,11 +1031,42 @@ it('Boss Arena standoff mode anchors boss, halts highway scrolling, and awards b
   assert.ok(loopSrc.includes('titan_slayer') && loopSrc.includes('Titan Slayer'), 'GameLoop awards Titan Slayer accolade');
 
   // 4. Endless Survival Duration Milestones
-  assert.ok(loopSrc.includes('INITIAL SURGE (1 MIN)') && loopSrc.includes('ENDLESS LEGEND (5 MIN)'), 'GameLoop awards in-game duration milestones in Endless Survival');
+  assert.ok(loopSrc.includes('INITIAL SURGE (1 MIN)') && loopSrc.includes('HIGHWAY GOD (10 MIN)'), 'GameLoop awards in-game duration milestones in Endless Survival');
 
   // 5. Result Modal Accolades UI
   assert.ok(htmlSrc.includes('id="resAccoladesRow"') && htmlSrc.includes('id="resAccoladesList"'), 'index.html contains accolades container in result modal');
   assert.ok(uiSrc.includes('resAccoladesList') && uiSrc.includes('acc.icon'), 'uiController dynamically renders earned tactical accolade badges in Result Modal');
+});
+
+// 41. Pre-Boss Gates Clearance, Boss Deflector Mini-Walls, High-Yield Endless Economy & Direct Combat Flow
+it('Pre-boss gates clearance, boss deflector mini-walls, high-yield endless economy, dynamic tally, and direct combat retry flow', () => {
+  const fs = require('fs');
+  const path = require('path');
+  const loopSrc = fs.readFileSync(path.join(__dirname, '../src/engine/gameLoop.ts'), 'utf8');
+  const combatSrc = fs.readFileSync(path.join(__dirname, '../src/engine/combat.ts'), 'utf8');
+  const waveSrc = fs.readFileSync(path.join(__dirname, '../src/engine/waveGenerator.ts'), 'utf8');
+  const renderSrc = fs.readFileSync(path.join(__dirname, '../src/engine/renderer.ts'), 'utf8');
+  const uiSrc = fs.readFileSync(path.join(__dirname, '../src/ui/uiController.ts'), 'utf8');
+  const htmlSrc = fs.readFileSync(path.join(__dirname, '../index.html'), 'utf8');
+
+  // 1. Pre-Boss Gates & Crates reach squad before standoff lock
+  assert.ok(loopSrc.includes('allPreGatesCleared') && loopSrc.includes('allPreCratesCleared'), 'GameLoop ensures pre-boss gates and crates clear squad before locking standoff');
+
+  // 2. Boss Tactical Guard Barriers / Deflector Mini-Walls
+  assert.ok(waveSrc.includes('guardShields') && waveSrc.includes('FLANK BARRIER'), 'WaveGenerator outfits bosses with tactical frontal guard barriers');
+  assert.ok(combatSrc.includes('shield.deflector && isRicochetShot'), 'CombatEngine allows ricochet shots to bypass deflector barriers and hit boss hull directly');
+  assert.ok(renderSrc.includes('guardShields') && renderSrc.includes('Hex energy deflector chevron'), 'GameRenderer renders active boss deflector barrier shields');
+
+  // 3. High-Yield Endless Coin Economy
+  assert.ok(loopSrc.includes('endlessThreatMult') && loopSrc.includes('25000'), 'GameLoop scales kill bounties by threat level and awards up to 25,000 coins for 10-min survival');
+
+  // 4. Dynamic Count-Up Tally Animation
+  assert.ok(uiSrc.includes('updateTally') && uiSrc.includes('tallyAnimId') && uiSrc.includes('accoladeTimeouts'), 'uiController executes animated count-up score tally with audio ticking');
+
+  // 5. Direct Combat Action Flow
+  assert.ok(htmlSrc.includes('id="btnResultHome"') && htmlSrc.includes('btnResultHome'), 'index.html contains dedicated HQ Home button');
+  assert.ok(uiSrc.includes('btnRetry') && uiSrc.includes('this.game.startCombat()'), 'uiController restarts combat immediately upon Retry without going to home page');
+  assert.ok(uiSrc.includes('btnNext') && uiSrc.includes('this.game.startCombat()'), 'uiController launches next level combat immediately upon Next Level click');
 });
 
 console.log('====================================================');

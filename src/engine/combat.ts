@@ -823,6 +823,48 @@ export class CombatEngine {
         // Enforce visible highway bounds: Enemies off-screen (y < 25) cannot be damaged or targeted
         if (!e.active || e.y < 25) continue;
 
+        // Check Boss Tactical Guard Barriers / Mini-Walls first
+        if (e.isBoss && e.guardShields) {
+          for (const shield of e.guardShields) {
+            if (!shield.broken) {
+              const sx = e.x + shield.relX;
+              const sy = e.y + shield.relY;
+              if (Math.abs(b.x - sx) <= shield.w / 2 && Math.abs(b.y - sy) <= shield.h / 2) {
+                // Tactical Ricochet Penetration:
+                // If bullet is a ricochet shot (deflected off Prism Mirrors or Diamond Splitters),
+                // it bypasses the frontal deflector barrier to strike the boss directly!
+                const isRicochetShot = (b.ricochetsLeft ?? 2) < 2 || b.isPierce;
+                if (shield.deflector && isRicochetShot) {
+                  continue;
+                }
+
+                b.active = false;
+                shield.hp -= b.damage;
+                this.createExplosionParticles(b.x, b.y, '#38bdf8', particles, 4, true);
+                if (shield.hp <= 0) {
+                  shield.broken = true;
+                  addTrauma(0.22);
+                  sfx.playExplosion(true);
+                  this.createExplosionParticles(sx, sy, '#38bdf8', particles, 16);
+                  if (shockwaves) this.createShockwave(sx, sy, '#38bdf8', shockwaves, 48);
+                  floatTexts.push({
+                    id: Math.random(),
+                    text: '🛡️ BARRIER SHATTERED!',
+                    x: sx,
+                    y: sy,
+                    vy: -30,
+                    color: '#38bdf8',
+                    fontSize: 12,
+                    alpha: 1.0,
+                    life: 0.9,
+                  });
+                }
+                return;
+              }
+            }
+          }
+        }
+
         // Check Boss Armor Plates first
         if (e.isBoss && e.armorPlates) {
           for (const plate of e.armorPlates) {

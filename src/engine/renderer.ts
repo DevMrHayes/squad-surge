@@ -540,6 +540,47 @@ export class GameRenderer {
           });
         }
 
+        // Render Boss Tactical Guard Barriers / Deflector Mini-Walls
+        if (e.guardShields) {
+          e.guardShields.forEach(shield => {
+            if (!shield.broken) {
+              const sx = e.x + shield.relX;
+              const sy = e.y + shield.relY;
+              const rx = sx - shield.w / 2;
+              const ry = sy - shield.h / 2;
+
+              ctx.save();
+              ctx.shadowColor = '#06b6d4';
+              ctx.shadowBlur = 8;
+              ctx.fillStyle = 'rgba(6, 182, 212, 0.28)';
+              ctx.strokeStyle = '#22d3ee';
+              ctx.lineWidth = 2.2;
+              ctx.beginPath();
+              ctx.roundRect(rx, ry, shield.w, shield.h, 4);
+              ctx.fill();
+              ctx.stroke();
+
+              // Hex energy deflector chevron
+              ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
+              ctx.lineWidth = 1.2;
+              ctx.beginPath();
+              ctx.moveTo(rx + 4, sy);
+              ctx.lineTo(sx, ry + 2);
+              ctx.lineTo(rx + shield.w - 4, sy);
+              ctx.stroke();
+
+              // Shield mini health bar
+              const shpRatio = Math.max(0, shield.hp / shield.maxHp);
+              ctx.fillStyle = '#0f172a';
+              ctx.fillRect(rx, ry - 4, shield.w, 3);
+              ctx.fillStyle = '#38bdf8';
+              ctx.fillRect(rx, ry - 4, shield.w * shpRatio, 3);
+
+              ctx.restore();
+            }
+          });
+        }
+
         // Boss Classification Label
         ctx.fillStyle = '#ffffff';
         ctx.font = '900 13px Inter, sans-serif';

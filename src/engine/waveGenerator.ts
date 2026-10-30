@@ -771,6 +771,30 @@ export class WaveGenerator {
         { id: 'left', hp: plateHp, maxHp: plateHp, broken: false, relX: -r * 0.85, relY: 0, w: r * 0.7, h: r * 1.2 },
         { id: 'right', hp: plateHp, maxHp: plateHp, broken: false, relX: r * 0.85, relY: 0, w: r * 0.7, h: r * 1.2 },
       ];
+
+      // Boss Tactical Guard Barriers: Frontal mini-walls that block direct frontal fire,
+      // compelling players to angle shots using wall Prism Mirrors or Diamond Splitters!
+      const shieldHp = Math.round(eDef.hp * 0.18);
+      enemy.guardShields = [
+        { id: 'guard_left', name: 'FLANK BARRIER', hp: shieldHp, maxHp: shieldHp, broken: false, relX: -r * 0.72, relY: r * 0.95, w: r * 0.85, h: 14, deflector: true },
+        { id: 'guard_right', name: 'FLANK BARRIER', hp: shieldHp, maxHp: shieldHp, broken: false, relX: r * 0.72, relY: r * 0.95, w: r * 0.85, h: 14, deflector: true },
+      ];
+      if (eDef.kind === 'TITAN') {
+        const centerShieldHp = Math.round(eDef.hp * 0.22);
+        enemy.guardShields.push({
+          id: 'guard_center',
+          name: 'CORE DEFLECTOR',
+          hp: centerShieldHp,
+          maxHp: centerShieldHp,
+          broken: false,
+          relX: 0,
+          relY: r * 1.18,
+          w: r * 0.95,
+          h: 15,
+          deflector: true,
+        });
+      }
+
       enemy.enraged = false;
       enemy.enrageDeployed = false;
     }
