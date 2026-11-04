@@ -1069,6 +1069,29 @@ it('Pre-boss gates clearance, boss deflector mini-walls, high-yield endless econ
   assert.ok(uiSrc.includes('btnNext') && uiSrc.includes('this.game.startCombat()'), 'uiController launches next level combat immediately upon Next Level click');
 });
 
+// 42. Unified Economy Ratio & Double-Counting Bug Prevention
+it('Unified economy balances Campaign rewards with Endless endurance and prevents coin double-counting', () => {
+  const fs = require('fs');
+  const path = require('path');
+  const storageSrc = fs.readFileSync(path.join(__dirname, '../src/services/storage.ts'), 'utf8');
+  const waveSrc = fs.readFileSync(path.join(__dirname, '../src/engine/waveGenerator.ts'), 'utf8');
+  const loopSrc = fs.readFileSync(path.join(__dirname, '../src/engine/gameLoop.ts'), 'utf8');
+
+  // 1. Double-counting bug prevention: recordEndlessRun must NOT re-add coinsEarned to currentSave.coins
+  const recordEndlessFn = storageSrc.match(/public recordEndlessRun\([\s\S]*?\n  \}/);
+  assert.ok(recordEndlessFn, 'recordEndlessRun found in storage.ts');
+  assert.ok(!recordEndlessFn[0].includes('this.currentSave.coins +='), 'recordEndlessRun does not re-add coinsEarned, preventing 2x duplication bug');
+
+  // 2. Campaign Level Clearance scales with Sector progression & Boss encounters
+  assert.ok(waveSrc.includes('Math.pow(level, 1.48)') && waveSrc.includes('400 + level * 20'), 'WaveGenerator scales base clearance reward with level tiers and boss multipliers');
+
+  // 3. Campaign victory accolades scale with level tiers
+  assert.ok(loopSrc.includes('levelScaling') && loopSrc.includes('Math.round(50 * levelScaling)'), 'GameLoop scales Campaign victory accolades and survival bonuses by level scaling factor');
+
+  // 4. Endless Threat Kill Bounty scales smoothly
+  assert.ok(loopSrc.includes('1 + this.endlessThreatLevel * 0.28'), 'GameLoop scales Endless kill bounties smoothly by threat level without hyper-inflation');
+});
+
 console.log('====================================================');
 console.log(`  Tests Completed: ${passedTests} / ${totalTests} Passed`);
 console.log('====================================================');

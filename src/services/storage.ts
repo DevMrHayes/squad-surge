@@ -350,8 +350,9 @@ export class StorageManager {
     this.saveLocal();
   }
 
-  public recordEndlessRun(timeSurvived: number, threatLevel: number, coinsEarned: number): { isNewRecord: boolean; prevBest: number } {
-    this.currentSave.coins += coinsEarned;
+  public recordEndlessRun(timeSurvived: number, threatLevel: number, _coinsEarned: number = 0): { isNewRecord: boolean; prevBest: number } {
+    // Note: Coins in Endless mode are credited to save.coins in real-time as crates, milestones, and enemies drop.
+    // We intentionally do NOT re-add coinsEarned here to prevent double-counting.
     this.currentSave.stats.gamesPlayed += 1;
     const prevBest = this.currentSave.stats.endlessBestTime || 0;
     const isNewRecord = timeSurvived > prevBest;

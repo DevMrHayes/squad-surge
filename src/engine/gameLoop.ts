@@ -596,14 +596,14 @@ export class GameLoop {
         this.plan.scrollSpeed = 0;
       }
 
-      // High-Yield Duration Accolade Milestones (scales with 2k+ upgrade costs):
+      // Balanced High-Yield Duration Accolade Milestones (scales with upgrade costs):
       const durationMilestones = [
-        { sec: 30, coins: 50, name: 'TACTICAL START (30 SEC)' },
-        { sec: 60, coins: 150, name: 'INITIAL SURGE (1 MIN)' },
-        { sec: 120, coins: 500, name: 'MOMENTUM (2 MIN)' },
-        { sec: 180, coins: 1500, name: 'SUSTAINED PRESSURE (3 MIN)' },
-        { sec: 300, coins: 5000, name: 'ENDLESS COLOSSUS (5 MIN)' },
-        { sec: 420, coins: 10000, name: 'APEX VANGUARD (7 MIN)' },
+        { sec: 30, coins: 30, name: 'TACTICAL START (30 SEC)' },
+        { sec: 60, coins: 100, name: 'INITIAL SURGE (1 MIN)' },
+        { sec: 120, coins: 350, name: 'MOMENTUM (2 MIN)' },
+        { sec: 180, coins: 1000, name: 'SUSTAINED PRESSURE (3 MIN)' },
+        { sec: 300, coins: 3500, name: 'ENDLESS COLOSSUS (5 MIN)' },
+        { sec: 420, coins: 7500, name: 'APEX VANGUARD (7 MIN)' },
         { sec: 600, coins: 25000, name: 'HIGHWAY GOD (10 MIN)' },
       ];
       for (const m of durationMilestones) {
@@ -937,9 +937,9 @@ export class GameLoop {
         else if (e.type === 'SPRINTER') bounty = 2;
         else if (e.type === 'MINE') bounty = 1;
 
-        // Endless Threat Scaling Kill Bounty (Multiplies coins by threat level)
+        // Endless Threat Scaling Kill Bounty (Multiplies coins smoothly by threat level)
         if (this.isEndless) {
-          const endlessThreatMult = Math.max(1, Math.floor(this.endlessThreatLevel * 0.75));
+          const endlessThreatMult = Math.max(1, Math.floor(1 + this.endlessThreatLevel * 0.28));
           bounty = bounty * endlessThreatMult;
         }
 
@@ -1117,10 +1117,11 @@ export class GameLoop {
         sfx.pauseBGM();
         sfx.playWin();
 
-        const survivalBonus = Math.max(0, this.player.count * 2);
+        const levelScaling = Math.max(1, 1 + (this.currentLevel - 1) * 0.10);
+        const survivalBonus = Math.max(0, Math.round(this.player.count * (2 + Math.floor(this.currentLevel / 15))));
         const baseReward = this.plan.coinReward;
 
-        // Tactical Accolade Benchmarks
+        // Tactical Accolade Benchmarks dynamically scaled with Campaign Sector progression
         const accolades: MissionAccolade[] = [];
         if (this.soldiersLostInLevel === 0) {
           accolades.push({
@@ -1128,7 +1129,7 @@ export class GameLoop {
             name: 'Unbroken Formation',
             icon: '🛡️',
             desc: 'Completed mission with 0 soldiers lost',
-            coins: 50,
+            coins: Math.round(50 * levelScaling),
           });
         }
         if (this.highestSquadInLevel >= 60) {
@@ -1137,7 +1138,7 @@ export class GameLoop {
             name: 'Massive Mobilization',
             icon: '👑',
             desc: 'Reached 60+ squad troops in mission',
-            coins: 100,
+            coins: Math.round(100 * levelScaling),
           });
         } else if (this.highestSquadInLevel >= 30) {
           accolades.push({
@@ -1145,7 +1146,7 @@ export class GameLoop {
             name: 'Dominant Force',
             icon: '⚡',
             desc: 'Reached 30+ squad troops in mission',
-            coins: 40,
+            coins: Math.round(40 * levelScaling),
           });
         }
         if (this.ricochetKillsInLevel >= 3) {
@@ -1154,7 +1155,7 @@ export class GameLoop {
             name: 'Trickshot Master',
             icon: '🎯',
             desc: '3+ kills deflected off Prism / Splitter mirrors',
-            coins: 45,
+            coins: Math.round(45 * levelScaling),
           });
         }
         if (this.altarUsedInLevel) {
@@ -1163,7 +1164,7 @@ export class GameLoop {
             name: "Altar's Blessing",
             icon: '🔮',
             desc: 'Purified and ascended weapon at Sacrifice Altar',
-            coins: 50,
+            coins: Math.round(50 * levelScaling),
           });
         }
         if (this.bossDefeatedInLevel === 'TITAN') {
@@ -1172,7 +1173,7 @@ export class GameLoop {
             name: 'Titan Slayer',
             icon: '☠️',
             desc: 'Defeated Titan Dreadnought in Standoff Arena',
-            coins: 150,
+            coins: Math.round(150 * levelScaling),
           });
         } else if (this.bossDefeatedInLevel === 'WARDEN' || this.bossDefeatedInLevel === 'CAPTAIN') {
           accolades.push({
@@ -1180,7 +1181,7 @@ export class GameLoop {
             name: 'Warden Slayer',
             icon: '⚔️',
             desc: 'Defeated Warden Gatekeeper in Standoff Arena',
-            coins: 75,
+            coins: Math.round(75 * levelScaling),
           });
         }
 

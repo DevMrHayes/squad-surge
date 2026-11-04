@@ -689,7 +689,9 @@ export class WaveGenerator {
       crateQueue,
       enemySchedule,
       obstacleQueue,
-      coinReward: Math.round(55 + level * 16 + (isTitan ? 120 : isWarden ? 65 : 0))
+      coinReward: Math.round(
+        85 + (level * 40) + Math.round(Math.pow(level, 1.48) * 8) + (isTitan ? (400 + level * 20) : isWarden ? (200 + level * 10) : 0)
+      )
     };
   }
 
