@@ -2,6 +2,7 @@
 class SoundManager {
   private ctx: AudioContext | null = null;
   public enabled: boolean = true;
+  public hapticsEnabled: boolean = true;
   private bgmAudio: HTMLAudioElement | null = null;
   private bgmPlaying: boolean = false;
 
@@ -66,6 +67,23 @@ class SoundManager {
       this.resumeBGM();
     }
     return this.enabled;
+  }
+
+  public toggleHaptics(): boolean {
+    this.hapticsEnabled = !this.hapticsEnabled;
+    if (this.hapticsEnabled) this.haptic(14);
+    return this.hapticsEnabled;
+  }
+
+  public haptic(pattern: number | number[] = 12): void {
+    if (!this.hapticsEnabled) return;
+    try {
+      if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
+        navigator.vibrate(pattern);
+      }
+    } catch {
+      // Ignore on unsupported browsers/devices
+    }
   }
 
   public playLaser(pitch: number = 580) {
@@ -343,6 +361,33 @@ class SoundManager {
 
       osc.start(startTime);
       osc.stop(startTime + 0.20);
+    });
+  }
+
+  public playAchievement() {
+    this.haptic([16, 28, 32]);
+    if (!this.enabled) return;
+    this.initCtx();
+    if (!this.ctx) return;
+
+    const notes = [523.25, 659.25, 783.99, 1046.5];
+    notes.forEach((freq, idx) => {
+      if (!this.ctx) return;
+      try {
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        const startTime = this.ctx.currentTime + idx * 0.08;
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(freq, startTime);
+        gain.gain.setValueAtTime(0.08, startTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, startTime + 0.26);
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(startTime);
+        osc.stop(startTime + 0.26);
+      } catch {
+        // ignore
+      }
     });
   }
 }

@@ -225,6 +225,7 @@
           <button id="btnResume" class="btn-tap w-full h-12 rounded-full bg-sky-400 text-slate-950 font-black text-sm uppercase shadow-md shadow-sky-400/20">Resume Mission</button>
           <button id="btnRestartPause" class="btn-tap w-full h-11 rounded-full bg-slate-800/80 border border-slate-700 text-slate-200 font-bold text-xs uppercase">Restart Level</button>
           <button id="btnToggleSound" class="btn-tap w-full h-11 rounded-full bg-slate-800/80 border border-slate-700 text-slate-300 font-bold text-xs">🔊 Sound: ON</button>
+          <button id="btnToggleHaptics" class="btn-tap w-full h-11 rounded-full bg-slate-800/80 border border-slate-700 text-slate-300 font-bold text-xs">📳 Haptics: ON</button>
         </div>
       </div>
 
@@ -334,6 +335,14 @@
               <button id="btnSaveLocalName" class="btn-tap h-9 px-3.5 rounded-xl bg-[#1565c0] text-white text-[11px] font-bold uppercase tracking-wider">
                 Save Name
               </button>
+            </div>
+            <!-- Household Family Slot Leaderboard -->
+            <div class="pt-2 border-t border-white/10">
+              <div class="text-[10px] font-black text-amber-300 uppercase tracking-wider mb-1.5 flex items-center gap-1">
+                <span>🏆</span>
+                <span>Household Scoreboard (Device Slots)</span>
+              </div>
+              <div id="householdLeaderboard" class="space-y-1"></div>
             </div>
           </div>
 

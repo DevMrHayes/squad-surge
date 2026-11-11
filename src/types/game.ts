@@ -67,6 +67,9 @@ export interface PlayerState {
   targetRightX?: number;
   dragSpeedMultiplier: number;
   fireRateMultiplier: number;
+  overdriveCharge: number;
+  overdriveTimer: number;
+  gearRank?: number;
 }
 
 export type GateKind = 'CHARGE_ADD' | 'LOCKED_MULT' | 'BUFF_GATE' | 'HAZARD' | 'ALTAR' | 'QUANTUM';
@@ -396,6 +399,7 @@ export interface SaveData {
     endlessBestLevel?: number;
   };
   achievements: Record<string, boolean>;
+  levelStars?: Record<string, number>;
   userId?: string;
   displayName?: string;
   lastSyncedAt?: number;

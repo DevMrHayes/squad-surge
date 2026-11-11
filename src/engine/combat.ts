@@ -79,7 +79,21 @@ export class CombatEngine {
   ): void {
     const permFireRate = 1 + (fireRateLvl - 1) * 0.10;
     const tempFireRate = player.buffs.rapidTimer > 0 ? 1.35 : 1.0;
-    const interval = 0.20 / (permFireRate * tempFireRate * player.fireRateMultiplier);
+    const isOverdrive = (player.overdriveTimer || 0) > 0;
+    const overdriveFireBoost = isOverdrive ? 1.35 : 1.0;
+    const interval = 0.20 / (permFireRate * tempFireRate * overdriveFireBoost * player.fireRateMultiplier);
+
+    const tierTracer = firepowerLvl >= 20 ? '#fbbf24'
+                     : firepowerLvl >= 10 ? '#c084fc'
+                     : firepowerLvl >= 5 ? '#22d3ee'
+                     : '#38bdf8';
+    const volleyColor = isOverdrive
+      ? '#fef08a'
+      : player.buffs.cryoTimer > 0
+      ? '#67e8f9'
+      : player.buffs.apTimer > 0
+      ? '#fde047'
+      : tierTracer;
 
     player.fireTimer += dt;
     player.sniperTimer -= dt;
@@ -116,8 +130,8 @@ export class CombatEngine {
             vy: -680,
             damage: dmgPerBullet * 1.05,
             gateCharge: gateChargePerBullet,
-            radius: 3.5,
-            color: player.buffs.cryoTimer > 0 ? '#67e8f9' : player.buffs.apTimer > 0 ? '#fde047' : '#38bdf8',
+            radius: isOverdrive ? 4.2 : 3.5,
+            color: volleyColor,
             isCryo: player.buffs.cryoTimer > 0,
             isBlast: player.buffs.blastTimer > 0,
             isPierce: player.buffs.apTimer > 0,
@@ -137,8 +151,8 @@ export class CombatEngine {
             vy: -680,
             damage: dmgPerBullet * 1.05,
             gateCharge: gateChargePerBullet,
-            radius: 3.5,
-            color: player.buffs.cryoTimer > 0 ? '#67e8f9' : player.buffs.apTimer > 0 ? '#fde047' : '#38bdf8',
+            radius: isOverdrive ? 4.2 : 3.5,
+            color: volleyColor,
             isCryo: player.buffs.cryoTimer > 0,
             isBlast: player.buffs.blastTimer > 0,
             isPierce: player.buffs.apTimer > 0,
@@ -180,8 +194,8 @@ export class CombatEngine {
             vy: -680,
             damage: dmgPerBullet,
             gateCharge: gateChargePerBullet,
-            radius: 3.5,
-            color: player.buffs.cryoTimer > 0 ? '#67e8f9' : player.buffs.apTimer > 0 ? '#fde047' : '#38bdf8',
+            radius: isOverdrive ? 4.2 : 3.5,
+            color: volleyColor,
             isCryo: player.buffs.cryoTimer > 0,
             isBlast: player.buffs.blastTimer > 0,
             isPierce: player.buffs.apTimer > 0,
@@ -379,15 +393,17 @@ export class CombatEngine {
       b.x += b.vx * dt;
       b.y += b.vy * dt;
 
-      // Secondary wall-rail bank for ricocheting bullets
+      // Secondary wall-rail bank for ricocheting bullets (flush with 16px highway edge rail)
       if (Math.abs(b.vx) > 100 && (b.ricochetsLeft ?? 0) > 0) {
-        if (b.x <= 18 && b.vx < 0) {
-          b.x = 20;
+        const railLeft = 16 + b.radius;
+        const railRight = cw - 16 - b.radius;
+        if (b.x <= railLeft && b.vx < 0) {
+          b.x = railLeft;
           b.vx = Math.abs(b.vx);
           b.ricochetsLeft = (b.ricochetsLeft || 1) - 1;
           this.createExplosionParticles(b.x, b.y, '#fde047', particles, 4, true);
-        } else if (b.x >= cw - 18 && b.vx > 0) {
-          b.x = cw - 20;
+        } else if (b.x >= railRight && b.vx > 0) {
+          b.x = railRight;
           b.vx = -Math.abs(b.vx);
           b.ricochetsLeft = (b.ricochetsLeft || 1) - 1;
           this.createExplosionParticles(b.x, b.y, '#fde047', particles, 4, true);
@@ -401,12 +417,48 @@ export class CombatEngine {
     }
   }
 
+  public static addOverdriveCharge(
+    player: PlayerState,
+    amount: number,
+    floatTexts?: FloatingText[],
+    shockwaves?: Shockwave[]
+  ): void {
+    if ((player.overdriveTimer || 0) > 0) return;
+    player.overdriveCharge = Math.min(100, (player.overdriveCharge || 0) + amount);
+    if (player.overdriveCharge >= 100) {
+      player.overdriveCharge = 0;
+      player.overdriveTimer = 4.0;
+      if (player.shields < 3) player.shields++;
+      sfx.playGateCharge();
+      sfx.haptic([18, 25, 22]);
+      if (shockwaves) {
+        this.createShockwave(player.x, player.y, '#fbbf24', shockwaves, 92);
+      }
+      if (floatTexts) {
+        floatTexts.push({
+          id: Math.random(),
+          text: '⚡ SURGE OVERDRIVE (4s)!',
+          x: player.x,
+          y: player.y - 50,
+          vy: -38,
+          color: '#fde047',
+          fontSize: 16,
+          alpha: 1.0,
+          life: 1.2,
+        });
+      }
+    }
+  }
+
   public static handleObstacleInteractions(
     player: PlayerState, 
     obstacles: FieldObstacle[], 
     bullets: Bullet[],
     dt: number,
-    particles?: Particle[]
+    particles?: Particle[],
+    cw: number = 380,
+    floatTexts?: FloatingText[],
+    shockwaves?: Shockwave[]
   ): void {
     player.fireRateMultiplier = 1.0;
     player.dragSpeedMultiplier = 1.0;
@@ -431,20 +483,34 @@ export class CombatEngine {
       }
 
       if (obs.type === 'PRISM_MIRROR') {
-        const bounceDirection = (obs.lane === 'LEFT' || obs.angleDeg > 0) ? 1 : -1;
+        const isLeft = obs.lane === 'LEFT' || obs.angleDeg > 0;
+        const bounceDirection = isLeft ? 1 : -1;
+        const roadMargin = 16;
+        const wallX = isLeft ? roadMargin : cw - roadMargin;
+        const jut = obs.width || 64;
+        const halfH = (obs.height || 76) / 2;
+
         bullets.forEach(b => {
           if (!b.active || !b.isFromPlayer || (b.ricochetsLeft ?? 2) <= 0) return;
           // Prevent double-colliding if bullet was already deflected in this direction
           if (Math.sign(b.vx) === bounceDirection && Math.abs(b.vx) > 200) return;
 
-          const collides = 
-            b.x >= obs.x - obs.width / 2 && 
-            b.x <= obs.x + obs.width / 2 && 
-            b.y >= obs.y - obs.height / 2 && 
-            b.y <= obs.y + obs.height / 2;
+          // Exact Triangular Bevel Collision (zero invisible padding in front of angled mirror face)
+          if (b.y < obs.y - halfH - b.radius || b.y > obs.y + halfH + b.radius) return;
+          const distFromWall = isLeft ? (b.x - wallX) : (wallX - b.x);
+          if (distFromWall < -b.radius || distFromWall > jut + b.radius) return;
+
+          const dy = Math.abs(b.y - obs.y);
+          const bevelSpanAtY = jut * Math.max(0, 1 - dy / halfH);
+          const collides = distFromWall <= bevelSpanAtY + b.radius;
 
           if (collides) {
             b.ricochetsLeft = (b.ricochetsLeft ?? 2) - 1;
+            // Snap cleanly onto bevel edge before diagonal reflection
+            const normX = Math.max(0, Math.min(0.95, distFromWall / Math.max(1, jut)));
+            const bevelEdgeY = obs.y + halfH * (1 - normX);
+            if (b.y > bevelEdgeY) b.y = bevelEdgeY;
+
             b.vx = bounceDirection * 440;
             b.vy = -500;
             b.damage *= 1.35; // Ricochet Overcharge (+35% damage)
@@ -454,12 +520,13 @@ export class CombatEngine {
             if (particles) {
               this.createExplosionParticles(b.x, b.y, '#fde047', particles, 5, true);
             }
+            this.addOverdriveCharge(player, 2.5, floatTexts, shockwaves);
             sfx.playRicochet();
           }
         });
       }
 
-      // Central Diamond Splitter: Clean, subtle 2-sided ricochet wedge (matches ricochet panels)
+      // Central Diamond Splitter: Exact diamond bevel check (no square corner padding)
       if (obs.type === 'BEAM_SPLITTER') {
         const hw = (obs.width || 42) / 2;
         const hh = (obs.height || 42) / 2;
@@ -468,11 +535,8 @@ export class CombatEngine {
           const bounceDirection = b.x < obs.x ? -1 : 1;
           if (Math.sign(b.vx) === bounceDirection && Math.abs(b.vx) > 200) return;
 
-          const collides = 
-            b.x >= obs.x - hw && 
-            b.x <= obs.x + hw && 
-            b.y >= obs.y - hh && 
-            b.y <= obs.y + hh;
+          const manhattan = Math.abs(b.x - obs.x) / (hw + b.radius) + Math.abs(b.y - obs.y) / (hh + b.radius);
+          const collides = manhattan <= 1.02;
 
           if (collides) {
             b.ricochetsLeft = (b.ricochetsLeft ?? 2) - 1;
@@ -485,6 +549,7 @@ export class CombatEngine {
             if (particles) {
               this.createExplosionParticles(b.x, b.y, '#38bdf8', particles, 2, true);
             }
+            this.addOverdriveCharge(player, 2.0, floatTexts, shockwaves);
             sfx.playRicochet();
           }
         });
@@ -603,7 +668,8 @@ export class CombatEngine {
     particles: Particle[],
     floatTexts: FloatingText[],
     unlockBoost: (boostType: string, x: number, y: number, color: string) => void,
-    shockwaves?: Shockwave[]
+    shockwaves?: Shockwave[],
+    player?: PlayerState
   ): void {
     bullets.forEach(b => {
       if (!b.active || !b.isFromPlayer) return;
@@ -645,6 +711,8 @@ export class CombatEngine {
               if (g.lockHitsRemaining <= 0) {
                 g.unlocked = true;
                 sfx.playGateCharge();
+                sfx.haptic(10);
+                if (player) this.addOverdriveCharge(player, 10, floatTexts, shockwaves);
                 this.createExplosionParticles(g.x, g.y, '#34d399', particles, 14);
                 if (shockwaves) this.createShockwave(g.x, g.y, '#34d399', shockwaves, 64);
                 floatTexts.push({
@@ -718,6 +786,8 @@ export class CombatEngine {
                 sfx.playGateCharge();
                 if (g.val >= g.maxVal) {
                   g.chargeHits = g.hitsPerStep;
+                  sfx.haptic(10);
+                  if (player) this.addOverdriveCharge(player, 8, floatTexts, shockwaves);
                   if (shockwaves) {
                     this.createShockwave(g.x, g.y, '#10b981', shockwaves, 52);
                   }
@@ -767,6 +837,8 @@ export class CombatEngine {
           if (c.hp <= 0) {
             unlockBoost(c.boostType, c.x, c.y, c.color);
             sfx.playExplosion(false);
+            sfx.haptic(15);
+            if (player) this.addOverdriveCharge(player, 12, floatTexts, shockwaves);
             if (shockwaves) this.createShockwave(c.x, c.y, c.color, shockwaves, 54);
             crates.splice(j, 1);
           }
@@ -845,6 +917,8 @@ export class CombatEngine {
                   shield.broken = true;
                   addTrauma(0.22);
                   sfx.playExplosion(true);
+                  sfx.haptic(16);
+                  this.addOverdriveCharge(player, 10, floatTexts, shockwaves);
                   this.createExplosionParticles(sx, sy, '#38bdf8', particles, 16);
                   if (shockwaves) this.createShockwave(sx, sy, '#38bdf8', shockwaves, 48);
                   floatTexts.push({
@@ -879,6 +953,8 @@ export class CombatEngine {
                   plate.broken = true;
                   addTrauma(0.24);
                   sfx.playExplosion(true);
+                  sfx.haptic(16);
+                  this.addOverdriveCharge(player, 10, floatTexts, shockwaves);
                   this.createExplosionParticles(px, py, '#f97316', particles, 18);
                   if (shockwaves) this.createShockwave(px, py, '#f97316', shockwaves, 48);
                 }
@@ -931,8 +1007,13 @@ export class CombatEngine {
           if (e.hp <= 0) {
             e.active = false;
             statsTracker.totalKills++;
-            if ((b.ricochetsLeft ?? 2) < 2) statsTracker.ricochetKills++;
-            if (e.isBoss) statsTracker.bossesDefeated++;
+            const isRicochetKill = (b.ricochetsLeft ?? 2) < 2;
+            if (isRicochetKill) statsTracker.ricochetKills++;
+            if (e.isBoss) {
+              statsTracker.bossesDefeated++;
+              sfx.haptic([24, 30, 36]);
+            }
+            this.addOverdriveCharge(player, isRicochetKill ? 5 : 2.5, floatTexts, shockwaves);
 
             this.createExplosionParticles(e.x, e.y, e.isBoss ? '#ef4444' : e.color, particles, e.isBoss ? 28 : 12);
             if (shockwaves && e.isBoss) this.createShockwave(e.x, e.y, '#ef4444', shockwaves, 100, 5.0);

@@ -787,10 +787,14 @@ export class UIController {
       this.showStartBriefing();
     });
 
-    // Sound toggle
+    // Sound & Haptics toggles
     document.getElementById('btnToggleSound')?.addEventListener('click', (e) => {
       const enabled = sfx.toggleMute();
       (e.currentTarget as HTMLElement).textContent = enabled ? '🔊 Sound: ON' : '🔇 Sound: OFF';
+    });
+    document.getElementById('btnToggleHaptics')?.addEventListener('click', (e) => {
+      const enabled = sfx.toggleHaptics();
+      (e.currentTarget as HTMLElement).textContent = enabled ? '📳 Haptics: ON' : '📴 Haptics: OFF';
     });
 
     // Result action buttons
@@ -1087,6 +1091,7 @@ export class UIController {
 
   private renderLevelMap(): void {
     const save = storage.getSave();
+    const starsMap = save.levelStars || {};
     const grid = document.getElementById('levelGrid')!;
     grid.innerHTML = '';
 
@@ -1094,9 +1099,10 @@ export class UIController {
       const unlocked = i <= save.maxLevel;
       const isTitan = i % 10 === 0;
       const isWarden = !isTitan && i % 5 === 0;
+      const stars = starsMap[String(i)] || 0;
 
       const btn = document.createElement('button');
-      btn.className = `btn-tap h-11 rounded-xl font-mono-num text-xs font-black border flex flex-col items-center justify-center ${
+      btn.className = `btn-tap h-12 rounded-xl font-mono-num text-xs font-black border flex flex-col items-center justify-center relative ${
         !unlocked
           ? 'bg-slate-900/40 border-slate-800/60 text-slate-600 cursor-not-allowed'
           : i === this.game.currentLevel
@@ -1107,7 +1113,13 @@ export class UIController {
           ? 'bg-amber-950/70 border-amber-500/50 text-amber-300'
           : 'bg-slate-900 border-slate-800 text-slate-200'
       }`;
-      btn.innerHTML = `<span>${i}</span>${isTitan ? '<span class="text-[8px]">☠️</span>' : isWarden ? '<span class="text-[8px]">👑</span>' : ''}`;
+      const bossIcon = isTitan ? '<span class="absolute top-0.5 right-1 text-[8px]">☠️</span>'
+                     : isWarden ? '<span class="absolute top-0.5 right-1 text-[8px]">👑</span>'
+                     : '';
+      const starsRow = stars > 0
+        ? `<span class="text-[8px] leading-none tracking-tighter">${'⭐'.repeat(stars)}</span>`
+        : (unlocked && i < save.maxLevel ? '<span class="text-[8px] leading-none text-slate-600">☆☆☆</span>' : '');
+      btn.innerHTML = `${bossIcon}<span>${i}</span>${starsRow}`;
 
       if (unlocked) {
         btn.addEventListener('click', () => {
@@ -1177,6 +1189,30 @@ export class UIController {
         });
         slotsContainer.appendChild(slotBtn);
       }
+    }
+
+    // Household Slot Leaderboard
+    const leaderboardEl = document.getElementById('householdLeaderboard');
+    if (leaderboardEl) {
+      const slotSummaries = [1, 2, 3]
+        .map(s => storage.getSlotSummary(s))
+        .sort((a, b) => (b.totalStars - a.totalStars) || (b.maxLevel - a.maxLevel) || (b.endlessBestTime - a.endlessBestTime));
+      const activeSlot = storage.getActiveSlot();
+      leaderboardEl.innerHTML = slotSummaries.map((sum, idx) => `
+        <div class="flex items-center justify-between px-2.5 py-1.5 rounded-lg text-[10px] ${
+          sum.slot === activeSlot ? 'bg-sky-500/15 border border-sky-400/30' : 'bg-[#0b101e]/80 border border-white/5'
+        }">
+          <div class="flex items-center gap-1.5 min-w-0">
+            <span class="font-black text-amber-300">#${idx + 1}</span>
+            <span class="font-bold text-white truncate">${sum.name}</span>
+          </div>
+          <div class="flex items-center gap-2.5 font-mono-num shrink-0 text-slate-300">
+            <span>Lv.${sum.maxLevel}</span>
+            <span class="text-amber-300">⭐ ${sum.totalStars}</span>
+            <span class="text-emerald-400">⏱️ ${this.formatSurvivalTime(sum.endlessBestTime || 0)}</span>
+          </div>
+        </div>
+      `).join('');
     }
 
     const statHighScore = document.getElementById('statHighScore');

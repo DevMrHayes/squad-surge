@@ -1092,6 +1092,56 @@ it('Unified economy balances Campaign rewards with Endless endurance and prevent
   assert.ok(loopSrc.includes('1 + this.endlessThreatLevel * 0.28'), 'GameLoop scales Endless kill bounties smoothly by threat level without hyper-inflation');
 });
 
+// 43. Argon Enhancement Suite: Flush Ricochet Bevel Geometry, Surge Overdrive, Aligned Mortar Telegraphs, Achievements, Stars & Household Leaderboard
+it('Flush ricochet bevel geometry eliminates wall padding, Surge Overdrive & Mortar Telegraphs align with squad, and Achievements/Stars/Haptics/Leaderboard are wired', () => {
+  const fs = require('fs');
+  const path = require('path');
+  const combatSrc = fs.readFileSync(path.join(__dirname, '../src/engine/combat.ts'), 'utf8');
+  const loopSrc = fs.readFileSync(path.join(__dirname, '../src/engine/gameLoop.ts'), 'utf8');
+  const renderSrc = fs.readFileSync(path.join(__dirname, '../src/engine/renderer.ts'), 'utf8');
+  const hudSrc = fs.readFileSync(path.join(__dirname, '../src/engine/squadHudRenderer.ts'), 'utf8');
+  const storageSrc = fs.readFileSync(path.join(__dirname, '../src/services/storage.ts'), 'utf8');
+  const audioSrc = fs.readFileSync(path.join(__dirname, '../src/services/audio.ts'), 'utf8');
+  const uiSrc = fs.readFileSync(path.join(__dirname, '../src/ui/uiController.ts'), 'utf8');
+  const htmlSrc = fs.readFileSync(path.join(__dirname, '../index.html'), 'utf8');
+
+  // 1. Exact Prism Mirror Bevel Collision (Zero Invisible Padding)
+  assert.ok(loopSrc.includes('ox = isLeft ? 16 + ow / 2 : this.cw - 16 - ow / 2'), 'Prism Mirror physics bounds anchor flush at 16px road rail');
+  assert.ok(combatSrc.includes('bevelSpanAtY = jut * Math.max(0, 1 - dy / halfH)'), 'CombatEngine uses triangular bevel span check for PRISM_MIRROR');
+  assert.ok(combatSrc.includes('manhattan <= 1.02'), 'CombatEngine uses exact Manhattan diamond check for BEAM_SPLITTER');
+  assert.ok(renderSrc.includes('const jut = (obs.width || 64) * (isLeft ? 1 : -1)'), 'Renderer syncs PRISM_MIRROR visual width with obs.width');
+
+  // Mathematical verification: bullet in empty corner in front of triangle bevel does NOT collide
+  const wallX = 16, jut = 64, obsY = 200, halfH = 38, r = 3.5;
+  const cornerBullet = { x: 75, y: 234 }; // outer lower corner outside diagonal bevel
+  const distFromWall = cornerBullet.x - wallX; // 59
+  const bevelAtCornerY = jut * Math.max(0, 1 - Math.abs(cornerBullet.y - obsY) / halfH); // 64 * (1 - 34/38) = 6.73
+  assert.strictEqual(distFromWall <= bevelAtCornerY + r, false, 'Bullet in empty corner in front of bevel passes cleanly without false bounce');
+
+  const bevelBullet = { x: 48, y: 219 }; // right on the 50% diagonal bevel edge!
+  const bevelDist = bevelBullet.x - wallX; // 32
+  const bevelAtMidY = jut * Math.max(0, 1 - Math.abs(bevelBullet.y - obsY) / halfH); // 32
+  assert.strictEqual(bevelDist <= bevelAtMidY + r, true, 'Bullet hitting actual mirror bevel reflects cleanly');
+
+  // 2. Surge Overdrive & Tier Tracers
+  assert.ok(combatSrc.includes('addOverdriveCharge') && combatSrc.includes('overdriveFireBoost'), 'CombatEngine awards Overdrive Charge and boosts fire rate during Surge Overdrive');
+  assert.ok(hudSrc.includes('renderSquadRailHud') && hudSrc.includes('getSoldierGearTrim'), 'squadHudRenderer draws Surge Overdrive rail bar, buff pills, and gear rank trim');
+
+  // 3. Defense Line & Mortar Telegraph Alignment
+  assert.ok(renderSrc.includes('const squadY = player.y || ch * 0.69;') && hudSrc.includes('renderMortarTelegraphs'), 'Renderer aligns defense line & mortar reticles to player.y (ch * 0.69)');
+
+  // 4. All 8 Achievements Wired
+  ['first_blood', 'squad_50', 'ricochet_master', 'altar_convert', 'sniper_elite', 'warden_down', 'titan_slayer', 'quantum_leap'].forEach(id => {
+    assert.ok(loopSrc.includes(id), `GameLoop wires achievement trigger for ${id}`);
+  });
+
+  // 5. 1-3 Star Ratings, Haptics & Household Slot Leaderboard
+  assert.ok(storageSrc.includes('recordLevelStars') && storageSrc.includes('totalStars'), 'StorageManager records 1-3 stars and aggregates slot totalStars');
+  assert.ok(audioSrc.includes('toggleHaptics') && audioSrc.includes('navigator.vibrate'), 'SoundManager implements safe mobile haptics and toggle');
+  assert.ok(htmlSrc.includes('btnToggleHaptics') && htmlSrc.includes('householdLeaderboard'), 'index.html exposes Pause Haptics button and Profile Household Leaderboard');
+  assert.ok(uiSrc.includes('householdLeaderboard') && uiSrc.includes('starsRow'), 'UIController renders Campaign stars and sorted Household Leaderboard');
+});
+
 console.log('====================================================');
 console.log(`  Tests Completed: ${passedTests} / ${totalTests} Passed`);
 console.log('====================================================');

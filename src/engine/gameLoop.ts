@@ -19,7 +19,7 @@ import {
   SectorId,
   MissionAccolade
 } from '../types/game';
-import { SECTOR_BIOMES } from '../constants/biomes';
+import { SECTOR_BIOMES, ACHIEVEMENTS_CATALOG } from '../constants/biomes';
 import { WaveGenerator } from './waveGenerator';
 import { CombatEngine } from './combat';
 import { GameRenderer } from './renderer';
@@ -118,7 +118,7 @@ export class GameLoop {
     const startCount = 5 + (save.upgrades.startSquad - 1) * 2;
     return {
       x: this.cw / 2,
-      y: this.ch * 0.78,
+      y: this.ch * 0.69,
       count: startCount,
       shields: 0,
       maxVisualBarrels: 14,
@@ -147,6 +147,9 @@ export class GameLoop {
       targetRightX: this.cw * 0.72,
       dragSpeedMultiplier: 1.0,
       fireRateMultiplier: 1.0,
+      overdriveCharge: 0,
+      overdriveTimer: 0,
+      gearRank: Math.max(save.upgrades.firepower, save.upgrades.armorPierce),
     };
   }
 
@@ -161,7 +164,7 @@ export class GameLoop {
     this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
     if (this.player) {
-      this.player.y = this.ch * 0.78;
+      this.player.y = this.ch * 0.69;
       if (this.mode === 'READY') {
         this.player.x = this.cw / 2;
         this.targetX = this.cw / 2;
@@ -395,17 +398,16 @@ export class GameLoop {
   private spawnObstacleEntity(oDef: ObstacleQueueItem): void {
     const isLeft = oDef.lane === 'LEFT';
     const scaleFactor = Math.max(1, Math.min(1.4, this.cw / 390));
-    const prismMargin = Math.round(54 * scaleFactor);
-    const prismX = isLeft ? prismMargin : this.cw - prismMargin;
     const stripX = isLeft ? this.cw * 0.27 : this.cw * 0.73;
     let ox = stripX;
     let ow = Math.round(116 * scaleFactor);
     let oh = 110;
 
     if (oDef.type === 'PRISM_MIRROR') {
-      ox = prismX;
-      ow = Math.round(78 * scaleFactor);
+      ow = Math.round(64 * scaleFactor);
       oh = 76;
+      // Anchor flush to the 16px road rail so collision bevel matches visual edge 1:1
+      ox = isLeft ? 16 + ow / 2 : this.cw - 16 - ow / 2;
     } else if (oDef.type === 'BEAM_SPLITTER') {
       ox = this.cw / 2;
       ow = Math.round(42 * scaleFactor);
@@ -468,6 +470,9 @@ export class GameLoop {
       this.player.specialists.sniper = Math.min(this.isEndless ? 2 : 10, this.player.specialists.sniper + specAdd);
       this.spawnFloatText(x, y - 24, `💎 +${specAdd} SNIPER SPECS!`, '#06b6d4');
       CombatEngine.updateSquadFormation(this.player);
+      if (this.player.specialists.sniper >= 5) {
+        this.checkAchievement('sniper_elite');
+      }
     } else if (boostType === 'VANGUARD') {
       const specAdd = this.isEndless ? 1 : 2;
       this.player.specialists.vanguard = Math.min(this.isEndless ? 2 : 10, this.player.specialists.vanguard + specAdd);
@@ -503,11 +508,23 @@ export class GameLoop {
     return this.plan.totalEnemies;
   }
 
+  private checkAchievement(id: string): void {
+    const ach = ACHIEVEMENTS_CATALOG.find(a => a.id === id);
+    if (!ach) return;
+    if (storage.unlockAchievement(ach.id, ach.rewardCoins)) {
+      this.sessionCoinsEarned += ach.rewardCoins;
+      sfx.playAchievement();
+      this.spawnFloatText(this.cw / 2, this.ch * 0.24, `🏆 ${ach.title}: +${ach.rewardCoins} 🪙!`, '#fde047', 14);
+      this.notifyHUD();
+    }
+  }
+
   private damageSquad(lossCount: number, label: string): boolean {
-    const squadY = this.ch * 0.78;
+    const squadY = this.ch * 0.69;
     if (this.player.shields > 0) {
       this.player.shields--;
       sfx.playExplosion(false);
+      sfx.haptic(14);
       this.trauma = Math.min(1.0, this.trauma + 0.20);
       CombatEngine.createExplosionParticles(this.player.x, squadY, '#c084fc', this.particles, 14);
       CombatEngine.createShockwave(this.player.x, squadY, '#c084fc', this.shockwaves, 48);
@@ -517,6 +534,7 @@ export class GameLoop {
     this.soldiersLostInLevel += lossCount;
     this.player.count = Math.max(0, this.player.count - lossCount);
     sfx.playLose();
+    sfx.haptic([24, 30, 24]);
     this.trauma = Math.min(1.0, this.trauma + 0.30);
     CombatEngine.createExplosionParticles(this.player.x, squadY, '#f43f5e', this.particles, 14);
     CombatEngine.createShockwave(this.player.x, squadY, '#f43f5e', this.shockwaves, 52);
@@ -648,12 +666,13 @@ export class GameLoop {
       this.trauma = Math.max(0, this.trauma - dt * 1.8);
     }
 
-    // Active buffs timer decay
+    // Active buffs & Surge Overdrive timer decay
     if (this.player.buffs.apTimer > 0) this.player.buffs.apTimer -= dt;
     if (this.player.buffs.cryoTimer > 0) this.player.buffs.cryoTimer -= dt;
     if (this.player.buffs.rapidTimer > 0) this.player.buffs.rapidTimer -= dt;
     if (this.player.buffs.blastTimer > 0) this.player.buffs.blastTimer -= dt;
     if (this.player.buffs.splitSquadTimer > 0) this.player.buffs.splitSquadTimer -= dt;
+    if (this.player.overdriveTimer > 0) this.player.overdriveTimer = Math.max(0, this.player.overdriveTimer - dt);
     if (this.dualThumbBannerTimer > 0) this.dualThumbBannerTimer -= dt;
 
     // Reposition squad to ch * 0.69 to provide generous ~215px thumb navigation zone below the crew
@@ -714,7 +733,7 @@ export class GameLoop {
       this.trauma = Math.min(1.0, this.trauma + amt);
     }, this.shockwaves, this.cw);
 
-    CombatEngine.handleObstacleInteractions(this.player, this.obstacles, this.bullets, dt, this.particles);
+    CombatEngine.handleObstacleInteractions(this.player, this.obstacles, this.bullets, dt, this.particles, this.cw, this.floatTexts, this.shockwaves);
 
     // Prevent enemies from phasing or getting stuck: bounce them into open lanes
     CombatEngine.handleEnemyObstacleCollisions(this.enemies, this.obstacles, this.cw, dt);
@@ -727,7 +746,8 @@ export class GameLoop {
       this.particles, 
       this.floatTexts,
       (type, x, y, col) => this.unlockTacticalBoost(type, x, y, col),
-      this.shockwaves
+      this.shockwaves,
+      this.player
     );
 
     const prevRicochet = save.stats.ricochetKills || 0;
@@ -745,6 +765,9 @@ export class GameLoop {
     );
     if ((save.stats.ricochetKills || 0) > prevRicochet) {
       this.ricochetKillsInLevel += ((save.stats.ricochetKills || 0) - prevRicochet);
+      if ((save.stats.ricochetKills || 0) >= 15) {
+        this.checkAchievement('ricochet_master');
+      }
     }
 
     // 5. Update Descending Gates
@@ -816,6 +839,7 @@ export class GameLoop {
           : Math.min(40, Math.round(this.player.count * (g.val - 1)));
         this.player.count = Math.min(squadCap, this.player.count + added);
         this.highestSquadInLevel = Math.max(this.highestSquadInLevel, this.player.count);
+        if (this.player.count >= 50) this.checkAchievement('squad_50');
         sfx.playGateCharge();
         CombatEngine.updateSquadFormation(this.player);
         this.spawnFloatText(this.player.x, squadY - 28, this.isEndless ? `+${added} SQUAD` : `x${g.val} SQUAD!`, '#34d399');
@@ -829,6 +853,7 @@ export class GameLoop {
         }
         save.stats.altarsUsed++;
         this.altarUsedInLevel = true;
+        this.checkAchievement('altar_convert');
         if (g.altarWeaponReward === 'laserWeapon') {
           this.player.buffs.laserWeapon = true;
           this.spawnFloatText(this.player.x, squadY - 30, '⚡ LASER EVOLVED!', '#c084fc');
@@ -844,6 +869,7 @@ export class GameLoop {
         if (delta > 0) {
           this.player.count = Math.min(squadCap, this.player.count + delta);
           this.highestSquadInLevel = Math.max(this.highestSquadInLevel, this.player.count);
+          if (this.player.count >= 50) this.checkAchievement('squad_50');
           sfx.playGateCharge();
           this.spawnFloatText(this.player.x, squadY - 28, `+${delta} SQUAD`, '#38bdf8');
         } else if (delta < 0) {
@@ -924,6 +950,7 @@ export class GameLoop {
         if (e.isBoss) {
           bounty = 25;
           this.bossDefeatedInLevel = e.type === 'TITAN' ? 'TITAN' : 'WARDEN';
+          this.checkAchievement(e.type === 'TITAN' ? 'titan_slayer' : 'warden_down');
           if (this.isBossArenaActive && this.arenaBoss?.id === e.id) {
             this.isBossArenaActive = false;
             this.arenaBoss = null;
@@ -1191,7 +1218,20 @@ export class GameLoop {
         this.sessionScore += 2500 + (this.player.count * 25) + (accoladeBonus * 10);
 
         storage.recordWin(this.currentLevel, totalReward);
+        const levelStars = this.soldiersLostInLevel === 0 ? 3 : (this.player.count >= 15 ? 2 : 1);
+        storage.recordLevelStars(this.currentLevel, levelStars);
+
+        // Wire Campaign victory achievements
+        this.checkAchievement('first_blood');
+        if (this.bossDefeatedInLevel === 'TITAN') {
+          this.checkAchievement('titan_slayer');
+        } else if (this.bossDefeatedInLevel === 'WARDEN' || this.bossDefeatedInLevel === 'CAPTAIN') {
+          this.checkAchievement('warden_down');
+        }
         const save = storage.getSave();
+        if (this.currentLevel >= 81 || save.maxLevel >= 81) {
+          this.checkAchievement('quantum_leap');
+        }
         save.stats.highScore = Math.max(save.stats.highScore || 0, this.sessionScore);
         storage.saveLocal();
 

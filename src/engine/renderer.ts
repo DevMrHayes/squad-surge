@@ -12,6 +12,7 @@ import {
   FloatingText,
   BiomeConfig 
 } from '../types/game';
+import { getSoldierGearTrim, renderMortarTelegraphs, renderSquadRailHud } from './squadHudRenderer';
 
 export class GameRenderer {
   public static render(
@@ -132,8 +133,8 @@ export class GameRenderer {
         ctx.save();
         const isLeft = obs.lane === 'LEFT' || obs.angleDeg > 0;
         const wallX = isLeft ? roadMargin : cw - roadMargin;
-        const jut = 68 * (isLeft ? 1 : -1);
-        const halfH = 38;
+        const jut = (obs.width || 64) * (isLeft ? 1 : -1);
+        const halfH = (obs.height || 76) / 2;
 
         // Flush Wall-Mounted Triangular Energy Bumper (spans into firing lane)
         ctx.fillStyle = 'rgba(15, 23, 42, 0.94)';
@@ -821,23 +822,9 @@ export class GameRenderer {
       ctx.restore();
     });
 
-    // 8. Render Enemy Artillery Reticles & Mortar Shells
-    enemyMortars.forEach(m => {
-      // Red Warning Reticle on Defense Line
-      ctx.save();
-      ctx.strokeStyle = 'rgba(239, 68, 68, 0.75)';
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.arc(m.targetX, ch * 0.78 + 18, 16 + Math.sin(elapsed * 12) * 3, 0, Math.PI * 2);
-      ctx.stroke();
-
-      // Descending Shell
-      ctx.fillStyle = '#ef4444';
-      ctx.beginPath();
-      ctx.arc(m.x, m.y, 6, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.restore();
-    });
+    // 8. Render Enemy Artillery Reticles & Mortar Shells (Aligned cleanly to squadY)
+    const squadY = player.y || ch * 0.69;
+    renderMortarTelegraphs(ctx, enemyMortars, squadY, elapsed);
 
     // 9. Render Player Bullets with Luminous Trails
     bullets.forEach(b => {
@@ -858,20 +845,23 @@ export class GameRenderer {
       ctx.restore();
     });
 
-    // 10. Elevated Defense Line & Thumb Control Track
-    const squadY = ch * 0.78;
-    ctx.strokeStyle = 'rgba(56, 189, 248, 0.35)';
+    // 10. Elevated Defense Line, Surge Rail Bar & Thumb Control Track
+    const isOverdrive = (player.overdriveTimer || 0) > 0;
+    const gearTrim = getSoldierGearTrim(player, isOverdrive);
+    ctx.strokeStyle = isOverdrive ? 'rgba(251, 191, 36, 0.72)' : 'rgba(56, 189, 248, 0.35)';
     ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.moveTo(roadMargin, squadY + 18);
     ctx.lineTo(cw - roadMargin, squadY + 18);
     ctx.stroke();
 
-    const trackTop = squadY + 36;
+    const trackTop = squadY + 42;
     ctx.fillStyle = 'rgba(2, 6, 23, 0.90)';
     ctx.fillRect(roadMargin, trackTop, cw - roadMargin * 2, ch - trackTop);
     ctx.strokeStyle = 'rgba(56, 189, 248, 0.22)';
     ctx.strokeRect(roadMargin, trackTop, cw - roadMargin * 2, ch - trackTop);
+
+    renderSquadRailHud(ctx, player, cw, roadMargin, squadY, trackTop);
 
     const isSplit = (player.buffs.splitSquadTimer ?? 0) > 0;
     const leftX = player.leftWingX ?? (player.x - 60);
@@ -995,23 +985,23 @@ export class GameRenderer {
       ctx.textAlign = 'center';
       ctx.fillText('👇 SLIDE THUMB HERE (CREW VISIBLE ABOVE) 👇', cw / 2, trackTop + 24);
 
-      // Soft Directional Ground Glow beneath Squad
+      // Soft Directional Ground Glow beneath Squad (evolves with Gear Rank / Overdrive)
       const squadSpan = Math.min(84, 24 + Math.sqrt(player.count) * 6);
       const squadGrad = ctx.createRadialGradient(player.x, squadY + 6, 4, player.x, squadY + 6, squadSpan);
-      squadGrad.addColorStop(0, 'rgba(56, 189, 248, 0.22)');
+      squadGrad.addColorStop(0, gearTrim.glowColor);
       squadGrad.addColorStop(1, 'transparent');
       ctx.fillStyle = squadGrad;
       ctx.beginPath();
       ctx.ellipse(player.x, squadY + 6, squadSpan, 14, 0, 0, Math.PI * 2);
       ctx.fill();
 
-      // 11. Render Dynamic Squad Cluster & Specialists (Phase 3)
+      // 11. Render Dynamic Squad Cluster & Specialists (Phase 3 + Tier Trim)
       player.members.forEach(m => {
         const mx = player.x + m.relX;
         const my = player.y + m.relY;
 
         ctx.save();
-        ctx.fillStyle = m.color;
+        ctx.fillStyle = isOverdrive ? '#fef08a' : m.color;
 
         if (m.type === 'SNIPER') {
           // Cyan Diamond
@@ -1063,10 +1053,15 @@ export class GameRenderer {
           ctx.lineTo(mx, my - 9);
           ctx.stroke();
         } else {
-          // Standard Soldier
+          // Standard Soldier with subtle Gear Tier Trim
           ctx.beginPath();
           ctx.arc(mx, my, 3.5, 0, Math.PI * 2);
           ctx.fill();
+          if (gearTrim.rankTier >= 2) {
+            ctx.strokeStyle = gearTrim.rimColor;
+            ctx.lineWidth = 1.1;
+            ctx.stroke();
+          }
         }
         ctx.restore();
       });

@@ -34,6 +34,7 @@ export const DEFAULT_SAVE: SaveData = {
     endlessBestLevel: 1,
   },
   achievements: {},
+  levelStars: {},
 };
 
 export class StorageManager {
@@ -95,18 +96,33 @@ export class StorageManager {
     }
   }
 
-  public getSlotSummary(slot: number): { slot: number; name: string; level: number; coins: number } {
+  public getSlotSummary(slot: number): {
+    slot: number;
+    name: string;
+    level: number;
+    maxLevel: number;
+    coins: number;
+    totalStars: number;
+    endlessBestTime: number;
+    victories: number;
+  } {
     try {
       const raw = localStorage.getItem(this.getSlotStorageKey(slot));
       const parsed = raw ? JSON.parse(raw) : DEFAULT_SAVE;
+      const starsMap = parsed.levelStars || {};
+      const totalStars = Object.values(starsMap).reduce((sum: number, val: any) => sum + (Number(val) || 0), 0);
       return {
         slot,
         name: this.getLocalCommanderName(slot),
         level: parsed.level || 1,
+        maxLevel: parsed.maxLevel || parsed.level || 1,
         coins: parsed.coins ?? 150,
+        totalStars,
+        endlessBestTime: parsed.stats?.endlessBestTime || 0,
+        victories: parsed.stats?.victories || 0,
       };
     } catch {
-      return { slot, name: `Commander ${slot}`, level: 1, coins: 150 };
+      return { slot, name: `Commander ${slot}`, level: 1, maxLevel: 1, coins: 150, totalStars: 0, endlessBestTime: 0, victories: 0 };
     }
   }
 
@@ -216,6 +232,7 @@ export class StorageManager {
         upgrades: { ...DEFAULT_SAVE.upgrades, ...(parsed.upgrades || {}) },
         stats: { ...DEFAULT_SAVE.stats, ...(parsed.stats || {}) },
         achievements: { ...(parsed.achievements || {}) },
+        levelStars: { ...(parsed.levelStars || {}) },
       };
     } catch {
       return JSON.parse(JSON.stringify(DEFAULT_SAVE));
@@ -289,6 +306,15 @@ export class StorageManager {
         ...this.currentSave.achievements,
         ...cloudSave.achievements,
       };
+    }
+    if (cloudSave.levelStars || this.currentSave.levelStars) {
+      const localStars = this.currentSave.levelStars || {};
+      const remoteStars = cloudSave.levelStars || {};
+      const mergedStars: Record<string, number> = { ...localStars };
+      for (const [k, v] of Object.entries(remoteStars)) {
+        mergedStars[k] = Math.max(mergedStars[k] || 0, Number(v) || 0);
+      }
+      this.currentSave.levelStars = mergedStars;
     }
 
     const afterJson = JSON.stringify(this.currentSave);
@@ -385,6 +411,17 @@ export class StorageManager {
       return true;
     }
     return false;
+  }
+
+  public recordLevelStars(level: number, stars: number): void {
+    const key = String(level);
+    const clamped = Math.max(1, Math.min(3, Math.floor(stars)));
+    if (!this.currentSave.levelStars) this.currentSave.levelStars = {};
+    const prev = this.currentSave.levelStars[key] || 0;
+    if (clamped > prev) {
+      this.currentSave.levelStars[key] = clamped;
+      this.saveLocal();
+    }
   }
 }
 

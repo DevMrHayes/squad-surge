@@ -83,6 +83,15 @@ export function sanitizeSaveData(raw?: Partial<SaveData> | null): SaveData {
     }
   }
 
+  const rawStars = s.levelStars || {};
+  const cleanStars: Record<string, number> = {};
+  for (const [k, v] of Object.entries(rawStars)) {
+    const n = Math.floor(Number(v));
+    if (n >= 1 && n <= 3) {
+      cleanStars[String(k)] = n;
+    }
+  }
+
   const level = Math.max(1, Math.min(100, Math.floor(Number(s.level) || 1)));
   const maxLevel = Math.max(level, Math.min(100, Math.floor(Number(s.maxLevel) || 1)));
 
@@ -113,6 +122,7 @@ export function sanitizeSaveData(raw?: Partial<SaveData> | null): SaveData {
       endlessBestLevel: Math.max(1, Math.floor(Number(st.endlessBestLevel) || 1)),
     },
     achievements: cleanAchievements,
+    levelStars: cleanStars,
   };
 }
 
