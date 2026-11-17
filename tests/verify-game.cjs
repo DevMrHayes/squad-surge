@@ -1128,7 +1128,7 @@ it('Flush ricochet bevel geometry eliminates wall padding, Surge Overdrive & Mor
   assert.ok(hudSrc.includes('renderSquadRailHud') && hudSrc.includes('getSoldierGearTrim'), 'squadHudRenderer draws Surge Overdrive rail bar, buff pills, and gear rank trim');
 
   // 3. Defense Line & Mortar Telegraph Alignment
-  assert.ok(renderSrc.includes('const squadY = player.y || ch * 0.69;') && hudSrc.includes('renderMortarTelegraphs'), 'Renderer aligns defense line & mortar reticles to player.y (ch * 0.69)');
+  assert.ok(renderSrc.includes('const squadY = player.y || ch * 0.78;') && hudSrc.includes('renderMortarTelegraphs'), 'Renderer aligns defense line & mortar reticles to player.y (ch * 0.78)');
 
   // 4. All 8 Achievements Wired
   ['first_blood', 'squad_50', 'ricochet_master', 'altar_convert', 'sniper_elite', 'warden_down', 'titan_slayer', 'quantum_leap'].forEach(id => {
@@ -1140,6 +1140,43 @@ it('Flush ricochet bevel geometry eliminates wall padding, Surge Overdrive & Mor
   assert.ok(audioSrc.includes('toggleHaptics') && audioSrc.includes('navigator.vibrate'), 'SoundManager implements safe mobile haptics and toggle');
   assert.ok(htmlSrc.includes('btnToggleHaptics') && htmlSrc.includes('householdLeaderboard'), 'index.html exposes Pause Haptics button and Profile Household Leaderboard');
   assert.ok(uiSrc.includes('householdLeaderboard') && uiSrc.includes('starsRow'), 'UIController renders Campaign stars and sorted Household Leaderboard');
+});
+
+// 44. Compact Thumb Track, Silent Unclaimed Barriers, Rolling Endless Squad Cap, Clear Weapon Indicators & Level Dual-Thumb Wings + Dual Claims
+it('Compact thumb track restores ch * 0.78, silent unclaimed barriers, rolling squad cap never shrinks upgraded squads, clear bonus/weapon pills, and dual-thumb wings are level and claim both rewards', () => {
+  const fs = require('fs');
+  const path = require('path');
+  const loopSrc = fs.readFileSync(path.join(__dirname, '../src/engine/gameLoop.ts'), 'utf8');
+  const renderSrc = fs.readFileSync(path.join(__dirname, '../src/engine/renderer.ts'), 'utf8');
+  const hudSrc = fs.readFileSync(path.join(__dirname, '../src/engine/squadHudRenderer.ts'), 'utf8');
+
+  // 1. Compact Thumb Track (ch * 0.78 + 36)
+  assert.ok(loopSrc.includes('const squadY = this.ch * 0.78;') && renderSrc.includes('const trackTop = squadY + 36;'), 'GameLoop and Renderer use compact ch * 0.78 thumb strip');
+
+  // 2. Silent Unclaimed Barriers (no noisy locked/unopened popups)
+  assert.ok(!loopSrc.includes('🚫 LOCKED OUT'), 'GameLoop does not emit noisy LOCKED OUT float text');
+  assert.ok(!loopSrc.includes('🔒 LOCKED GATE'), 'GameLoop does not emit noisy LOCKED GATE float text');
+  assert.ok(!loopSrc.includes('🔒 CRATE UNOPENED'), 'GameLoop does not emit noisy CRATE UNOPENED float text');
+
+  // 3. Rolling Squad Limit in Endless Mode (upgrades +1 squad instead of shrinking 49 -> 40)
+  assert.ok(loopSrc.includes('Math.max(40, startCount + 35, this.player.count)'), 'GameLoop uses rolling Endless squad cap anchored above startCount & current count');
+  const startCount = 49;
+  const currentCount = 49;
+  const rollingCap = Math.max(40, startCount + 35, currentCount);
+  assert.strictEqual(rollingCap, 84, 'Upgraded startCount=49 gets rolling Endless cap of 84');
+  const afterPlusOne = Math.max(currentCount, Math.min(rollingCap, currentCount + 1));
+  assert.strictEqual(afterPlusOne, 50, 'Hitting +1 squad gate with 49 troops grows to 50 instead of clamping down to 40');
+
+  // 4. Level Left & Right Wings in Dual-Thumb Split Mode
+  assert.ok(renderSrc.includes('const localIdx = atLeft ? idx : (idx - halfCount);') && renderSrc.includes('const my = squadY + row * 7.5;'), 'Renderer computes local wing row=0 grid so Left & Right wings sit level at squadY');
+
+  // 5. Dual-Thumb Claiming BOTH Beneficial Barrier Rewards
+  assert.ok(loopSrc.includes('isBeneficialGate') && loopSrc.includes('bothClaimableInSplit'), 'GameLoop allows Dual-Thumb wings to claim both touched beneficial barrier rewards');
+
+  // 6. Clear Bonus & Weapon Indicators (Lasers, Missiles, Specialists, Shields, Buffs)
+  ['⚡ LASER', '🚀 MISSILES', '💎 SNIPER', '❄️ CRYO SLOW', '⚡ ARMOR PIERCE', '🔥 FAST FIRE', '💥 BLAST AoE'].forEach(label => {
+    assert.ok(hudSrc.includes(label), `squadHudRenderer displays clear indicator for ${label}`);
+  });
 });
 
 console.log('====================================================');

@@ -118,7 +118,7 @@ export class GameLoop {
     const startCount = 5 + (save.upgrades.startSquad - 1) * 2;
     return {
       x: this.cw / 2,
-      y: this.ch * 0.69,
+      y: this.ch * 0.78,
       count: startCount,
       shields: 0,
       maxVisualBarrels: 14,
@@ -164,7 +164,7 @@ export class GameLoop {
     this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
     if (this.player) {
-      this.player.y = this.ch * 0.69;
+      this.player.y = this.ch * 0.78;
       if (this.mode === 'READY') {
         this.player.x = this.cw / 2;
         this.targetX = this.cw / 2;
@@ -520,7 +520,7 @@ export class GameLoop {
   }
 
   private damageSquad(lossCount: number, label: string): boolean {
-    const squadY = this.ch * 0.69;
+    const squadY = this.ch * 0.78;
     if (this.player.shields > 0) {
       this.player.shields--;
       sfx.playExplosion(false);
@@ -675,8 +675,8 @@ export class GameLoop {
     if (this.player.overdriveTimer > 0) this.player.overdriveTimer = Math.max(0, this.player.overdriveTimer - dt);
     if (this.dualThumbBannerTimer > 0) this.dualThumbBannerTimer -= dt;
 
-    // Reposition squad to ch * 0.69 to provide generous ~215px thumb navigation zone below the crew
-    const squadY = this.ch * 0.69;
+    // Position squad at ch * 0.78 for a compact ergonomic thumb strip (~100-108px) below the crew
+    const squadY = this.ch * 0.78;
     this.player.y = squadY;
 
     // 1. Smooth squad movement toward targetX or dual wings
@@ -814,30 +814,47 @@ export class GameLoop {
       })
       .sort((a, b) => getGatePriority(b) - getGatePriority(a));
 
+    const isBeneficialGate = (gate: typeof this.gates[number]): boolean => {
+      if (gate.kind === 'LOCKED_MULT' || gate.kind === 'BUFF_GATE') return !!gate.unlocked;
+      if (gate.kind === 'ALTAR') return true;
+      if (gate.kind === 'CHARGE_ADD' || gate.kind === 'QUANTUM') return gate.val > 0;
+      return false;
+    };
+
+    const startCount = 5 + ((save.upgrades.startSquad || 1) - 1) * 2;
+    const squadCap = this.isEndless
+      ? Math.max(40, startCount + 35, this.player.count)
+      : Math.max(220, startCount + 120, this.player.count);
+
     for (const g of touchedGates) {
       const idx = this.gates.findIndex(item => item.id === g.id);
       if (idx === -1) continue; // Already shattered by sibling mutual exclusion
 
-      // MUTUAL EXCLUSION: If gate is paired, shatter the sibling gate in this dilemma row
+      // MUTUAL EXCLUSION: In Dual-Thumb Split Mode, allow claiming BOTH touched beneficial rewards;
+      // otherwise shatter sibling gates silently without noisy locked popups.
       if (g.pairId) {
         for (let s = this.gates.length - 1; s >= 0; s--) {
           const sib = this.gates[s];
           if (sib.id !== g.id && sib.pairId === g.pairId) {
-            CombatEngine.createExplosionParticles(sib.x, sib.y, '#94a3b8', this.particles, 10, true);
-            this.spawnFloatText(sib.x, squadY - 24, '🚫 LOCKED OUT', '#94a3b8');
-            this.gates.splice(s, 1);
+            const bothClaimableInSplit =
+              isSplitMode &&
+              touchedGates.some(tg => tg.id === sib.id) &&
+              isBeneficialGate(sib);
+            if (!bothClaimableInSplit) {
+              CombatEngine.createExplosionParticles(sib.x, sib.y, '#94a3b8', this.particles, 10, true);
+              this.gates.splice(s, 1);
+            }
           }
         }
       }
 
-      const squadCap = this.isEndless ? 40 : 220;
       if ((g.kind === 'LOCKED_MULT' || g.kind === 'BUFF_GATE') && !g.unlocked) {
-        this.spawnFloatText(this.player.x, squadY - 28, '🔒 LOCKED GATE (NO EFFECT)', '#94a3b8');
+        // Locked/uncharged barrier yields nothing silently
       } else if (g.kind === 'LOCKED_MULT') {
         const added = this.isEndless
           ? Math.min(3, Math.max(1, g.val))
           : Math.min(40, Math.round(this.player.count * (g.val - 1)));
-        this.player.count = Math.min(squadCap, this.player.count + added);
+        this.player.count = Math.max(this.player.count, Math.min(squadCap, this.player.count + added));
         this.highestSquadInLevel = Math.max(this.highestSquadInLevel, this.player.count);
         if (this.player.count >= 50) this.checkAchievement('squad_50');
         sfx.playGateCharge();
@@ -867,7 +884,7 @@ export class GameLoop {
       } else if (g.kind === 'CHARGE_ADD' || g.kind === 'HAZARD' || g.kind === 'QUANTUM') {
         const delta = g.val;
         if (delta > 0) {
-          this.player.count = Math.min(squadCap, this.player.count + delta);
+          this.player.count = Math.max(this.player.count, Math.min(squadCap, this.player.count + delta));
           this.highestSquadInLevel = Math.max(this.highestSquadInLevel, this.player.count);
           if (this.player.count >= 50) this.checkAchievement('squad_50');
           sfx.playGateCharge();
@@ -882,7 +899,7 @@ export class GameLoop {
       if (removeIdx !== -1) this.gates.splice(removeIdx, 1);
     }
 
-    // 6. Update Descending Crates (Unopened reward crates expire harmlessly without shrinking squad)
+    // 6. Update Descending Crates (Unopened reward crates expire harmlessly without shrinking squad or noisy popups)
     for (let i = this.crates.length - 1; i >= 0; i--) {
       const c = this.crates[i];
       c.y += this.plan.scrollSpeed * 0.9 * dt;
@@ -897,7 +914,6 @@ export class GameLoop {
 
       if (touchesCrate) {
         this.crates.splice(i, 1);
-        this.spawnFloatText(c.x, squadY - 26, '🔒 CRATE UNOPENED', '#94a3b8');
         continue;
       }
       if (c.y > this.ch + 50) this.crates.splice(i, 1);

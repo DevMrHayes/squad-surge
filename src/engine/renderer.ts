@@ -823,7 +823,7 @@ export class GameRenderer {
     });
 
     // 8. Render Enemy Artillery Reticles & Mortar Shells (Aligned cleanly to squadY)
-    const squadY = player.y || ch * 0.69;
+    const squadY = player.y || ch * 0.78;
     renderMortarTelegraphs(ctx, enemyMortars, squadY, elapsed);
 
     // 9. Render Player Bullets with Luminous Trails
@@ -855,7 +855,7 @@ export class GameRenderer {
     ctx.lineTo(cw - roadMargin, squadY + 18);
     ctx.stroke();
 
-    const trackTop = squadY + 42;
+    const trackTop = squadY + 36;
     ctx.fillStyle = 'rgba(2, 6, 23, 0.90)';
     ctx.fillRect(roadMargin, trackTop, cw - roadMargin * 2, ch - trackTop);
     ctx.strokeStyle = 'rgba(56, 189, 248, 0.22)';
@@ -907,15 +907,22 @@ export class GameRenderer {
         ctx.fill();
       });
 
-      // Render members partitioned between Left and Right wings
+      // Render members partitioned cleanly between level Left and Right wings (starting at row 0 / squadY)
       const halfCount = Math.ceil(player.members.length / 2);
       player.members.forEach((m, idx) => {
         const atLeft = idx < halfCount;
         const wx = atLeft ? leftX : rightX;
-        const mx = wx + m.relX * 0.75;
-        const my = player.y + m.relY * 0.75;
+        const localIdx = atLeft ? idx : (idx - halfCount);
+        const wingTotal = atLeft ? halfCount : Math.max(1, player.members.length - halfCount);
+        const wingCols = Math.min(6, Math.ceil(Math.sqrt(wingTotal * 1.5)));
+        const row = Math.floor(localIdx / wingCols);
+        const col = localIdx % wingCols;
+        const rowCols = Math.min(wingCols, wingTotal - row * wingCols);
+        const startX = -((rowCols - 1) * 7) / 2;
+        const mx = wx + startX + col * 7;
+        const my = squadY + row * 7.5;
 
-        ctx.fillStyle = m.color;
+        ctx.fillStyle = isOverdrive ? '#fef08a' : m.color;
         if (m.type === 'SNIPER') {
           ctx.beginPath();
           ctx.moveTo(mx, my - 5);
@@ -942,7 +949,7 @@ export class GameRenderer {
         }
       });
 
-      // Wing Count Badges
+      // Wing Count Badges (Level across squadY)
       const leftTroopCount = Math.ceil(player.count / 2);
       const rightTroopCount = Math.max(1, Math.floor(player.count / 2));
       [
@@ -953,14 +960,14 @@ export class GameRenderer {
         ctx.strokeStyle = '#38bdf8';
         ctx.lineWidth = 1.4;
         ctx.beginPath();
-        ctx.roundRect(w.x - 22, player.y - 28, 44, 18, 5);
+        ctx.roundRect(w.x - 22, squadY - 28, 44, 18, 5);
         ctx.fill();
         ctx.stroke();
 
         ctx.fillStyle = '#38bdf8';
         ctx.font = '900 10.5px "JetBrains Mono", monospace';
         ctx.textAlign = 'center';
-        ctx.fillText(`${w.label}:${w.count}`, w.x, player.y - 15);
+        ctx.fillText(`${w.label}:${w.count}`, w.x, squadY - 15);
       });
 
       // Top Center Dual-Thumb Countdown Badge
@@ -969,14 +976,14 @@ export class GameRenderer {
       ctx.lineWidth = 1.5;
       const timerW = 160;
       ctx.beginPath();
-      ctx.roundRect(cw / 2 - timerW / 2, player.y - 58, timerW, 22, 6);
+      ctx.roundRect(cw / 2 - timerW / 2, squadY - 54, timerW, 22, 6);
       ctx.fill();
       ctx.stroke();
 
       ctx.fillStyle = '#38bdf8';
       ctx.font = '900 10.5px "JetBrains Mono", monospace';
       ctx.textAlign = 'center';
-      ctx.fillText(`⚡ DUAL-THUMB: ${player.buffs.splitSquadTimer.toFixed(1)}s`, cw / 2, player.y - 43);
+      ctx.fillText(`⚡ DUAL-THUMB: ${player.buffs.splitSquadTimer.toFixed(1)}s`, cw / 2, squadY - 39);
 
       ctx.restore();
     } else {
